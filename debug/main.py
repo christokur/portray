@@ -3,11 +3,11 @@ import pathlib
 
 mod_dir = pathlib.Path(__file__).parent.parent
 if not str(mod_dir) in sys.path:
-    sys.path.append(str(mod_dir))
+    sys.path.insert(0, str(mod_dir))
 
 pdocs_dir = pathlib.Path(__file__).parent.parent.parent / "pdocs"
 if pdocs_dir.is_dir() and not str(pdocs_dir) in sys.path:
-    sys.path.append(str(pdocs_dir))
+    sys.path.insert(0, str(pdocs_dir))
 
 try:
     from portray.cli import __hug__  # type: ignore
