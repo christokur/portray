@@ -1,6 +1,8 @@
 """Defines how to render the current project and project_config using the
 included documentation generation utilities.
 """
+import logging
+
 import os
 import shutil
 import sys
@@ -67,6 +69,19 @@ def mkdocs(config: dict):
     This rendering is from `.md` Markdown documents into HTML
     """
     config_instance = _mkdocs_config(config)
+
+    logger = logging.getLogger('mkdocs')
+    # Don't restrict level on logger; use handler
+    logger.setLevel(1)
+    logger.propagate = False
+
+    stream = logging.StreamHandler()
+    from mkdocs.__main__ import ColorFormatter
+    stream.setFormatter(ColorFormatter())
+    stream.setLevel(logging.WARNING)
+    stream.name = 'MkDocsStreamHandler'
+    logger.addHandler(stream)
+
     return mkdocs_build(config_instance)
 
 
@@ -149,7 +164,13 @@ def documentation_in_temp_folder(config: dict) -> Iterator[Tuple[str, str]]:
                 with yaspin(text="Auto generating reference documentation using pdocs") as spinner:
                     if "output_dir" not in config["pdocs"]:
                         config["pdocs"]["output_dir"] = os.path.join(input_dir, "reference")
-                    pdocs(config["pdocs"])
+                    try:
+                        pdocs(config["pdocs"])
+                    except Exception as exc:
+                        import traceback
+                        tb = traceback.format_tb(exc.__traceback__)
+                        print("".join(tb), file=sys.stderr)
+                        raise exc
                     reference_docs = _nested_docs(config["pdocs"]["output_dir"], input_dir, config)
                     nav.append({"Reference": reference_docs})  # type: ignore
                     spinner.ok("Done")
