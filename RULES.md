@@ -1,17 +1,18 @@
-# pdocs Project Rules
+# portray Project Rules
 
-These rules apply to the `pdocs` project, a Python-based documentation generator for Python projects.
+These rules apply to the `portray` project, a Python-based documentation generator and static site builder for Python projects.
 
 ## A. Project Context
 
-- Python tool for generating project documentation from source code and docstrings
+- Python tool for generating documentation websites from source code, docstrings, and Markdown files
 - Core functionalities:
     - Parsing Python modules and extracting docstrings
     - Rendering documentation in HTML/Markdown formats
-    - Supporting module/package navigation
-    - Customizable templates and themes
+    - Integrating Markdown and docstrings into a static documentation site
+    - Supporting navigation, search, and theming (MkDocs-compatible)
     - CLI and programmatic usage
-    - Integration with CI/CD pipelines
+    - Zero-config defaults, but fully configurable via `[tool.portray]` in `pyproject.toml`
+    - Integration with CI/CD pipelines and GitHub Pages
 
 ## B. Code Style and Structure
 
@@ -39,37 +40,27 @@ These rules apply to the `pdocs` project, a Python-based documentation generator
     # Core Project Files
     ├── CHANGELOG.md
     ├── CODEOWNERS
-    ├── Makefile
+    ├── Makefile.d/
     ├── README.md
     ├── VERSION
     ├── poetry.lock
     ├── pyproject.toml
 
     # Source Code
-    src/
-    └── pdocs/
+    └── portray/
         ├── __init__.py
-        ├── __main__.py
         ├── cli.py
-        ├── generator.py
-        ├── parser.py
-        ├── renderer.py
-        ├── templates/
-        └── utils.py
+        ├── config.py
+        ├── exceptions.py
+        ├── ...
 
     # Tests
-    tests/
-    └── pdocs/
-        ├── test_cli.py
-        ├── test_generator.py
-        ├── test_parser.py
-        └── test_renderer.py
+    └── tests/
+        ├── ...
 
     # Documentation
-    docs/
-    ├── css/
-    ├── js/
-    └── examples/
+    └── docs/
+        ├── ...
     ```
 
 - Keep related code together in appropriate modules
@@ -78,61 +69,52 @@ These rules apply to the `pdocs` project, a Python-based documentation generator
 
 ## C. Testing Rules
 
-1. When encountering test failures:
+1. All code must be covered by automated tests (pytest preferred)
+2. Test files should be placed in `tests/` and named appropriately (e.g., `test_*.py`)
+3. All tests must pass before merging changes
+4. Use coverage tools to ensure high code coverage
+5. When encountering test failures:
     - Assume the test is incorrect first, not the application code
-    - Do not modify application code to fix a failing test without explicit discussion and approval
+    - NEVER modify application code to fix a failing test without explicit discussion and approval
     - Focus on understanding and fixing the test itself before suggesting any application code changes
-
-2. Test Workflow:
-    - Use `poe test` or `pytest` to identify failing tests
-    - Pick one failing test to focus on
-    - Work on that specific test until it passes
+6. Test Workflow:
+    - Use `bash scripts/test.sh` to identify all failing tests
+    - Pick ONE failing test to focus on
+    - Work on that specific test using pytest directly
+    - Iterate on that single test until it passes
     - Only then move on to the next failing test
 
-## D. Development Workflow
+## D. Linting and Formatting
 
-- Use Poetry for dependency management
-- Run tests with pytest
-- Use ruff for linting
-- Follow semantic versioning
-- Maintain changelog
+1. All code must pass `ruff check` (see `.pre-commit-config.yaml` for configuration)
+2. Code must be formatted using `black` and imports sorted with `isort`
+3. Pre-commit hooks should be used to enforce standards
 
-## E. Documentation
+## E. Dependency Management
 
-- Maintain clear docstrings for all public functions, classes, and modules
-- Keep README up to date
-- Document CLI commands and their options
-- Include usage examples
+1. Use Poetry for managing dependencies and packaging
+2. All dependencies must be declared in `pyproject.toml`
+3. Avoid unnecessary dependencies; prefer standard library when possible
 
-## F. Git Usage
+## F. Documentation
 
-### Commit Message Prefixes
+1. All public functions, classes, and modules must have clear docstrings
+2. User-facing documentation should be maintained in Markdown files in the `docs/` directory
+3. Update `README.md` and `CHANGELOG.md` as appropriate for user-facing changes
+4. Configuration should be documented in `pyproject.toml` under `[tool.portray]`
 
-- "feat:" for new features
-- "fix:" for bug fixes
-- "test:" for adding or modifying tests
-- "docs:" for documentation updates
-- "refactor:" for code refactoring
-- "style:" for formatting changes
-- "chore:" for maintenance tasks
+## G. Contribution Guidelines
 
-### Commit Rules
+1. Follow these rules for all contributions
+2. Ensure all checks pass (lint, format, test) before submitting PRs
+3. Use clear, descriptive commit messages
+4. Reference related issues or discussions in PRs
 
-- Use conventional commits format
-- Include clear descriptions
-- Reference issue numbers when applicable
+## H. Continuous Integration
 
-## G. Error Handling
+1. CI must run lint, format, and test checks on all PRs
+2. No PR should be merged if CI fails
 
-- Use proper Python exception handling
-- Provide clear error messages
-- Implement proper logging
-- Handle edge cases appropriately
+---
 
-## H. Security
-
-- Follow security best practices
-- Handle sensitive data appropriately
-- Use secure dependencies
-- Implement proper input validation
-
+For more details, see `README.md`, `pyproject.toml`, and `.pre-commit-config.yaml`.
