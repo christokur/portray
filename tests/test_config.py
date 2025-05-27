@@ -1,4 +1,5 @@
 import os
+import warnings
 
 from hypothesis_auto import auto_test
 from portray import config, exceptions
@@ -68,7 +69,11 @@ def test_setup_py_properties():
 
 
 def test_toml_properties():
-    auto_test(config.toml)
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message=r"No config file found at location: .*")
+        auto_test(config.toml)
 
 
 def test_mkdocs_properties():
