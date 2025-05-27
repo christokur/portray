@@ -4,7 +4,7 @@
 set +o errexit
 set -o nounset
 
-__version__="0.26.83"
+__version__="0.26.84"
 
 GITHUB_REF_NAME=${GITHUB_REF_NAME:-$(git branch --show-current)}
 GITHUB_REPOSITORY=${GITHUB_REPOSITORY:-SandsB2B/$(basename $PWD)}

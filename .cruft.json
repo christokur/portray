@@ -1,7 +1,7 @@
 {
   "template": "git@github.com:SandsB2B/cookiecutter-b2b-project.git",
-  "commit": "f1daeec863b3e39c45b59231aa51fd9b25e71ae7",
-  "checkout": "v0.26.83",
+  "commit": "c181afe77e40335a38a8f67c80393baa6f5fe1bf",
+  "checkout": "v0.26.84",
   "context": {
     "cookiecutter": {
       "authors": "Timothy Crosley <timothy.crosley@gmail.com>",
@@ -13,7 +13,7 @@
       "description": "Your Project with Great Documentation",
       "license_text": "MIT License",
       "readme": "README.md",
-      "version": "1.6.0",
+      "version": "1.9.0",
       "package_name": "portray",
       "packager": "poetry",
       "dynamic": "",
@@ -33,7 +33,7 @@
       "python_requires": "",
       "python_toolbag_version": "",
       "pip_version": "~=25.1.1",
-      "cruft_skip": ".bumpversion.cfg,CODEOWNERS,docs/TODO.md,README.md,Makefile,.pre-commit-config.yaml,.gitignore,tests/test_dummy.py,.github/workflows/build-test-publish.yml,tests/test_nothing.py,CHANGELOG.md,debug/interpolate.py,debug/poetry_exe.py,.github/workflows/build-test-publish.yml,poetry.lock,.gitignore,RULES.md,TESTS.md,docs,src,pdocs,art,LICENSE,.windsurfrules,scripts/clean.sh,scripts/lint.sh,scripts/test.sh,scripts/test_cli_py.py,firebender.json,.github/workflows/mkdocs-gh-pages.yml,.gitlint,.gitownrc,.tflint.hcl,.tflint.ignore",
+      "cruft_skip": ".bumpversion.cfg,CODEOWNERS,docs/TODO.md,README.md,Makefile,.pre-commit-config.yaml,.gitignore,tests/test_dummy.py,.github/workflows/build-test-publish.yml,tests/test_nothing.py,CHANGELOG.md,debug/interpolate.py,debug/poetry_exe.py,.github/workflows/build-test-publish.yml,poetry.lock,.gitignore,RULES.md,TESTS.md,docs,src,portray*,art,LICENSE,.windsurfrules,scripts/clean.sh,scripts/lint.sh,scripts/test.sh,scripts/test_cli_py.py,firebender.json,.github/workflows/mkdocs-gh-pages.yml,.gitlint,.gitownrc,.tflint.hcl,.tflint.ignore,TROUBLESHOOTING.md",
       "src_path_prefix": "",
       "site_name": "Python Docs",
       "site_description": "A simple program and library to auto generate API documentation for Python modules.",
@@ -98,14 +98,14 @@
         "tests"
       ],
       "test_exclude_list": "",
-      "src_path_prefix_list": "pdocs",
+      "src_path_prefix_list": "portray",
       "testpaths_list": "",
       "tests_list": "",
       "poe_prepare_sequence": "locks,deps,formats,tests,gcl,docs-make,add,hooks",
       "_extensions": [
-        "toolbag.utils.template_expander.extensions.PythonExtension",
         "toolbag.utils.template_expander.extensions.python_extension.PythonExtension",
-        "toolbag.utils.template_expander.extensions.ExpandCookiecutterTemplateExtension"
+        "toolbag.utils.template_expander.extensions.ExpandCookiecutterTemplateExtension",
+        "toolbag.utils.template_expander.extensions.PythonExtension"
       ],
       "_notes": {
         "lists": "Lists have a special meaning for Cookiecutter so we are forced to wrap them in a map or express as a CSV string and split in the template.",
@@ -183,7 +183,7 @@
       "poetry_extras": {},
       "poetry_packages": {
         "1": {
-          "include": "pdocs"
+          "include": "portray"
         }
       },
       "poetry_plugins": {},
@@ -198,8 +198,9 @@
         "name": "\"material\""
       },
       "pytest_ini_options": {},
+      "tools": {},
       "_template": "git@github.com:SandsB2B/cookiecutter-b2b-project.git",
-      "_commit": "f1daeec863b3e39c45b59231aa51fd9b25e71ae7",
+      "_commit": "c181afe77e40335a38a8f67c80393baa6f5fe1bf"
     }
   },
   "directory": null
