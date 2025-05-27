@@ -75,6 +75,7 @@ def project(directory: str, config_file: str, **overrides) -> dict:
         warnings.warn(
             "pdoc3 config usage is deprecated in favor of pdocs. " "pdoc3 section will be ignored. ",
             DeprecationWarning,
+            stacklevel=2,
         )
     project_config["pdocs"] = pdocs(directory, **project_config.get("pdocs", {}))
     return project_config
@@ -87,8 +88,8 @@ def setup_py(location: str) -> dict:
         with open(location) as setup_py_file:
             for node in ast.walk(ast.parse(setup_py_file.read())):
                 if (
-                    type(node) == _ast.Call
-                    and type(getattr(node, "func", None)) == _ast.Name
+                    type(node) is _ast.Call
+                    and type(getattr(node, "func", None)) is _ast.Name
                     and node.func.id == "setup"  # type: ignore
                 ):
                     for keyword in node.keywords:  # type: ignore
@@ -97,7 +98,10 @@ def setup_py(location: str) -> dict:
                             break
                     break
     except Exception as error:
-        warnings.warn(f"Error ({error}) occurred trying to parse setup.py file: {location}")
+        warnings.warn(
+            f"Error ({error}) occurred trying to parse setup.py file: {location}",
+            stacklevel=2,
+        )
 
     return setup_config
 
@@ -112,10 +116,10 @@ def toml(location: str) -> dict:
     try:
         location_exists = os.path.exists(location)
         if not location_exists:
-            warnings.warn(f'\nNo config file found at location: "{location}"')
+            warnings.warn(f'\nNo config file found at location: "{location}"', stacklevel=2)
             return {}
     except Exception as detection_error:  # pragma: no cover
-        warnings.warn(f'\nUnable to check config at "{location}" due to error: {detection_error}')
+        warnings.warn(f'\nUnable to check config at "{location}" due to error: {detection_error}', stacklevel=2)
 
     try:
         toml_config = toml_load(location)
@@ -132,7 +136,7 @@ def toml(location: str) -> dict:
 
         return config
     except Exception as load_config_error:
-        warnings.warn(f'\nConfig file at "{location}" has errors: {load_config_error}')
+        warnings.warn(f'\nConfig file at "{location}" has errors: {load_config_error}', stacklevel=2)
 
     return {}
 
@@ -187,7 +191,7 @@ def repository(
         }
 
     except Exception:
-        warnings.warn("Unable to identify `repo_name`, `repo_url`, and `edit_uri` automatically.")
+        warnings.warn("Unable to identify `repo_name`, `repo_url`, and `edit_uri` automatically.", stacklevel=2)
         return {}
 
 

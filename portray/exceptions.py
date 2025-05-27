@@ -7,7 +7,7 @@ class PortrayError(Exception):
     pass
 
 
-class NoProjectFound(PortrayError):
+class NoProjectFound(PortrayError):  # noqa: N818
     """Thrown when portray is ran in a directory with no Python project"""
 
     def __init__(self, directory: str):
@@ -19,7 +19,7 @@ class NoProjectFound(PortrayError):
         self.directory = directory
 
 
-class DocumentationAlreadyExists(PortrayError):
+class DocumentationAlreadyExists(PortrayError):  # noqa: N818
     """Thrown when portray has been told to output documentation where it already exists"""
 
     def __init__(self, directory: str):
