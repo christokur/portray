@@ -1,0 +1,111 @@
+#!/usr/bin/env bash
+
+GITHUB_REF_NAME=${GITHUB_REF_NAME:-$(git branch --show-current)}
+
+function handle_exemptions() {
+    export nounset=$(
+      shopt                -o nounset > /dev/null
+      echo $?
+    )                                                    || true
+    export errexit=$(
+      shopt                 -o errexit > /dev/null
+      echo $?
+    )                                                      || true
+    export xtrace=$(
+      shopt                 -o xtrace > /dev/null
+      echo $?
+    )                                                      || true
+    [ 1 -eq $errexit ] || { set +e; }
+    [ 1 -eq $nounset ] || { set +o nounset; }
+    [ 1 -eq $xtrace ] || { set +x; }
+
+    # Short circuit if there are no changes
+    [ -z "$(git status --porcelain)" ] && return 0
+
+    local repo=$1
+    [ ! -z "$repo"] || repo=$(basename $PWD)
+
+    [ "$GITHUB_REF_NAME" == "ld--dev--3--use2" -o "$GITHUB_REF_NAME" == "branch" ] || {
+        echo "Please customize this handler for your feature branch";
+        return 1;
+    }
+
+    echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+    echo "Exempting stuff in $repo from uncommitted changes check"
+    echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+
+    echo "ld--dev--3--use2 no variants"
+    git status --porcelain | egrep 'D environments/ld--dev--3--use2' | awk '/sds-client-euroulette/ { print "git checkout "$2 }' | bash || true
+
+    git status --porcelain | egrep 'D environments/ld--dev--3--use2' | awk '/sds-client-roulettes-am/ { print "git checkout "$2 }' | bash || true
+
+    git status --porcelain | egrep '\?\? environments/ld--dev--3--use2' | awk '/sds-client-roulettes/ { print "git clean -f "$2 }' | bash || true
+
+    echo "ld--dev--3--use2 baccarat"
+    git status --porcelain | egrep '. environments/ld--dev--3--use2' | awk '/baccarat/ { print "git checkout "$2 }' | bash || true
+
+    echo "ld--dev--3--use2 image version"
+    git status --porcelain | egrep 'M environments/ld--dev--3--use2' | awk '/ldx-sinks\/sink-/ { print "git checkout "$2 }' | bash || true
+    git status --porcelain | egrep 'M environments/ld--dev--3--use2' | awk '/ldx-sinks\/sink-/ { print "git clean -f "$2 }' | bash || true
+
+    git status --porcelain | egrep 'M generated/ld--dev--3--use2' | awk '/values.yaml/ { print "git checkout "$2 }' | bash || true
+    git status --porcelain | egrep 'M generated/ld--dev--3--use2' | awk '/values.yaml/ { print "git clean -f "$2 }' | bash || true
+
+    git status --porcelain | egrep 'M generated/ld--dev--3--use2' | awk '/sds-client-baccarat\/kustomization.yaml/ { print "git checkout "$2 }' | bash || true
+    git status --porcelain | egrep 'M generated/ld--dev--3--use2' | awk '/sds-client-baccarat\/kustomization.yaml/ { print "git clean -f "$2 }' | bash || true
+
+    git status --porcelain | egrep 'M generated/ld--dev--3--use2' | awk '/sds-client-euroulette\/kustomization.yaml/ { print "git checkout "$2 }' | bash || true
+    git status --porcelain | egrep 'M generated/ld--dev--3--use2' | awk '/sds-client-euroulette\/kustomization.yaml/ { print "git clean -f "$2 }' | bash || true
+
+    git status --porcelain | awk '/Application-ld--dev--3--use2--ldx--edge.yaml/ { print "git checkout "$2 }' | bash || true
+    git status --porcelain | awk '/Application-ld--dev--3--use2--ldx--edge.yaml/ { print "git clean -f "$2 }' | bash || true
+
+    git status --porcelain | awk '/Application-ld--dev--3--use2--ldx--studio.yaml/ { print "git checkout "$2 }' | bash || true
+    git status --porcelain | awk '/Application-ld--dev--3--use2--ldx--studio.yaml/ { print "git clean -f "$2 }' | bash || true
+
+    echo "All of ld--dev--1--use2"
+    git status --porcelain | awk '/ld--dev--1--use2/ { print "git checkout "$2 }' | bash || true
+    git status --porcelain | awk '/ld--dev--1--use2/ { print "git clean -f "$2 }' | bash || true
+
+    echo "All of ld--dev--2--use2"
+    git status --porcelain | awk '/ld--dev--2--use2/ { print "git checkout "$2 }' | bash || true
+    git status --porcelain | awk '/ld--dev--2--use2/ { print "git clean -f "$2 }' | bash || true
+
+    echo "All client config.js files (whitespace changes)"
+    git status --porcelain | awk '/config.js$/ { print "git checkout "$2 }' | bash || true
+
+    echo "Known missing sinks"
+    # modified:   environments/ld--dev--2--use2/ldx-sinks/kustomization.yaml
+    # deleted:    environments/ld--dev--2--use2/ldx-sinks/sink-edge-fast-action-roulette-spin-history.yaml
+    # deleted:    environments/ld--dev--2--use2/ldx-sinks/sink-edge-sic-bo-roll-history.yaml
+    for file in 'ldx-sinks\/kustomization.yaml' \
+    'ldx-sinks\/sink-edge-fast-action-roulette-spin-history.yaml' \
+    'ldx-sinks\/sink-edge-sic-bo-roll-history.yaml'; do
+      git status --porcelain | awk "/$file\$/ { print \"git checkout \"\$2 }" | bash || true
+      git status --porcelain | awk "/$file\$/ { print \"git clean -f \"\$2 }" | echo || true
+      git status --porcelain | awk "/$file\$/ { print \"git clean -f \"\$2 }" | bash || true
+    done
+
+    echo "ldx.targetRevision fix"
+    # clusters/cs-prod-us-east-2/default/argocd/Application-ld--demo--2--use2--ldx--studio.yaml
+    for file in 'clusters\/cs-prod-us-east-2\/default\/argocd\/Application-.*?--ldx--studio.yaml' \
+    'clusters\/cs-prod-us-east-2\/default\/argocd\/Application-.*?--ldx--edge.yaml' \
+    ; do
+      git status --porcelain | awk "/$file\$/ { print \"git checkout \"\$2 }" | bash || true
+    done
+
+    echo "Postgres change"
+    # ld--dev--5--use2/ldx-postgres-hack/edge-user-connection.yaml
+    for file in 'ldx-postgres-hack\/edge-user-connection.yaml' \
+    'ldx-postgres-hack\/studio-user-connection.yaml' \
+    'ldx-postgres-hack\/kustomization.yaml' \
+    'generated\/.*?\/values\/edge-values.yaml' \
+    'generated\/.*?\/values\/studio-values.yaml' \
+    ; do
+      git status --porcelain | awk "/$file\$/ { print \"git checkout \"\$2 }" | bash || true
+    done
+
+    [ 1 -eq $errexit ] || { set -e; }
+    [ 1 -eq $nounset ] || { set -o nounset; }
+    [ 1 -eq $xtrace ] || { set -x; }
+}

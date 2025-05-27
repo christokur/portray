@@ -1,0 +1,1980 @@
+#!/usr/bin/env bash
+
+#set -x
+set +o errexit
+set -o nounset
+
+__version__="0.26.83"
+
+GITHUB_REF_NAME=${GITHUB_REF_NAME:-$(git branch --show-current)}
+GITHUB_REPOSITORY=${GITHUB_REPOSITORY:-SandsB2B/$(basename $PWD)}
+[ ! -z "GITHUB_TOKEN" ] || { echo "ERROR: Set GITHUB_TOKEN please"; exit 1; }
+[ ! -z "GITHUB_ACCESS_TOKEN" ] || { echo "ERROR: Set GITHUB_ACCESS_TOKEN please"; exit 1; }
+GITHUB_WORKSPACE=${GITHUB_WORKSPACE:-$PWD}
+
+
+function prepare() {
+    export nounset=$(shopt -o nounset > /dev/null; echo $?) || true
+    export errexit=$(shopt -o errexit > /dev/null; echo $?) || true
+    export xtrace=$(shopt -o xtrace > /dev/null; echo $?) || true
+    [ 1 -eq $errexit ] || { set +e; }
+    [ 1 -eq $nounset ] || { set +o nounset; }
+
+    RC=0
+    [ type setup_git_config 2>/dev/null ] || . $GITHUB_WORKSPACE/cicd/rc/setup_github_actions_git.rc
+    [ type fix_git_remote 2>/dev/null ] || . $GITHUB_WORKSPACE/cicd/rc/setup_github_actions_git.rc
+    [ -f ~/.ssh/id_ed25519 ] || {
+        RC=0
+        setup_gpg_key
+        RC=$((RC + $?))
+        setup_ssh_config
+        RC=$((RC + $?))
+        setup_git_config
+        RC=$((RC + $?))
+        [ 0 -eq $RC ] || {
+            echo "ERROR: setup_gpg_key, setup_ssh_config, setup_git_config failed with RC=$RC";
+            return 1
+        }
+    }
+
+    export AWS_PROFILE=$AWS_PROFILE_TOOLS # cloud-services-prod
+
+    [ type aws_setup_pip_codeartifact_access 2>/dev/null ] || . $GITHUB_WORKSPACE/cicd/rc/configure_aws_codeartifact.rc
+    aws_setup_pip_codeartifact_access manifests || true
+    RC=$?
+    [ $RC -eq 0 ] || {
+        echo "ERROR: aws_setup_pip_codeartifact_access manifests failed with RC=$RC";
+    }
+
+    cd $GITHUB_WORKSPACE
+    mkdir -p workspace 2>/dev/null || true
+
+    if [ "$PHASE" == "2" ] ; then
+      echo "=================================================="
+      echo "             Setup b2b environment"
+      export B2B_INFRASTRUCTURE_WORKSPACE_DIR=${B2B_INFRASTRUCTURE_WORKSPACE_DIR:-$GITHUB_WORKSPACE/workspace}
+      export B2B_INFRASTRUCTURE_ROOT_DIR=${B2B_INFRASTRUCTURE_ROOT_DIR:-$B2B_INFRASTRUCTURE_WORKSPACE_DIR/b2b-infrastructure}
+#      export AWS_ROLE_ARN=arn:aws:iam::ACCOUNT_ID:role/github-terraform-pipelines
+
+      cd $GITHUB_WORKSPACE
+      [ "${DEBUG:-0}" -lt 2 ] ||  env | sort
+      b2b version
+      RC=$?
+      [ $RC -eq 0 ] || {
+          echo "ERROR: b2b version failed with RC=$RC";
+      }
+      echo "=================================================="
+    fi
+
+    [ 1 -eq $errexit ] || { set -e; }
+    [ 1 -eq $nounset ] || { set -o nounset; }
+    [ 0 -eq $xtrace ] || { set +x; }
+    return $RC
+}
+
+function repos_and_branches_phase2() {
+    export nounset=$(shopt -o nounset > /dev/null; echo $?) || true
+    export errexit=$(shopt -o errexit > /dev/null; echo $?) || true
+    export xtrace=$(shopt -o xtrace > /dev/null; echo $?) || true
+    [ 1 -eq $errexit ] || { set +e; }
+    [ 1 -eq $nounset ] || { set +o nounset; }
+
+    #set -x
+
+    # b2b-cli can clone the repos
+    [ "${CLONE_DEPLOYMENT_SOURCES:-yes}" != "no" ] || {
+        return 0
+    }
+
+    CONFIG_FILE="$1"
+    [ ! -z "$CONFIG_FILE" ] || {
+        echo "ERROR: CONFIG_FILE was not provided";
+        return 1
+    }
+
+    RC=0
+    # Look at the static file first
+    REPOS_AND_BRANCHES_TXT=${REPOS_AND_BRANCHES_TXT:-cicd/rc/repos_and_branches.txt}
+    [ -f "$REPOS_AND_BRANCHES_TXT" ] || {
+      echo "ERROR: $REPOS_AND_BRANCHES_TXT not found";
+      RC=1
+    }
+    [ 0 -ne $RC ] || {
+      # Load the contents and check
+      export REPOS_AND_BRANCHES=${REPOS_AND_BRANCHES:-$(cat $REPOS_AND_BRANCHES_TXT)}
+      [ ! -z "$REPOS_AND_BRANCHES" ] || {
+        echo "ERROR: REPOS_AND_BRANCHES is not set";
+        RC=2
+      }
+    }
+    REPOS_AND_BRANCHES_TXT_TMP=$(basename $REPOS_AND_BRANCHES_TXT 2>/dev/null)
+    cat $REPOS_AND_BRANCHES_TXT | sort >$REPOS_AND_BRANCHES_TXT_TMP 2>/dev/null
+    # Generate the dynamic version
+    echo "++++++++++++++++++++++++++++++++++++++++++++++++++"
+    echo "          Generate repos and branches             "
+    export REPOS_AND_BRANCHES_GENERATED="/tmp/repos-and-branches.txt"
+    [ 0 -ne $RC ] || {
+      python3 scripts/repos-and-branches.py $CONFIG_FILE >$REPOS_AND_BRANCHES_GENERATED
+      RC=$?
+    }
+    [ 0 -ne $RC ] || {
+      diff=$(diff "$REPOS_AND_BRANCHES_TXT_TMP" "$REPOS_AND_BRANCHES_GENERATED")
+      [ -z "$diff" ] || {
+        echo "ERROR: REPOS_AND_BRANCHES and REPOS_AND_BRANCHES_GENERATED do not match";
+        echo "ERROR: $diff";
+        RC=4
+      }
+    }
+
+    [ 0 -ne $RC ] || {
+      echo "SUCCESS: $REPOS_AND_BRANCHES_TXT and $REPOS_AND_BRANCHES_GENERATED match";
+    }
+
+    [ 0 -eq $RC ] || {
+      echo "ERROR: repos_and_branches failed with RC=$RC";
+    }
+    echo "       Done generating repos and branches         "
+    echo "--------------------------------------------------"
+
+    [ 1 -eq $errexit ] || { set -e; }
+    [ 1 -eq $nounset ] || { set -o nounset; }
+    [ 0 -eq $xtrace ] || { set +x; }
+    return $RC
+}
+
+function repos_and_branches() {
+    export nounset=$(shopt -o nounset > /dev/null; echo $?) || true
+    export errexit=$(shopt -o errexit > /dev/null; echo $?) || true
+    export xtrace=$(shopt -o xtrace > /dev/null; echo $?) || true
+    [ 1 -eq $errexit ] || { set +e; }
+    [ 1 -eq $nounset ] || { set +o nounset; }
+
+    #set -x
+
+    if [ -z "${REPOS_AND_BRANCHES}" ] ; then
+
+      CONFIG_FILE="$1"
+      [ ! -z "$CONFIG_FILE" ] || {
+          echo "ERROR: CONFIG_FILE was not provided";
+          return 1
+      }
+
+      RC=0
+      # Generate the dynamic version
+      export REPOS_AND_BRANCHES_TXT=${REPOS_AND_BRANCHES_TXT:-cicd/rc/repos_and_branches.txt}
+      echo "++++++++++++++++++++++++++++++++++++++++++++++++++"
+      echo "          Generate repos and branches             "
+      [ 0 -ne $RC ] || {
+        python3 scripts/repos-and-branches.py $CONFIG_FILE >$REPOS_AND_BRANCHES_TXT
+        RC=$?
+      }
+
+      if [ 0 -eq $RC ] ; then
+        echo "SUCCESS: $REPOS_AND_BRANCHES_TXT generated";
+        export REPOS_AND_BRANCHES=${REPOS_AND_BRANCHES:-$(cat $REPOS_AND_BRANCHES_TXT)}
+      else
+        echo "ERROR: repos_and_branches failed with RC=$RC";
+      fi
+
+      echo "       Done generating repos and branches         "
+      echo "--------------------------------------------------"
+
+    fi
+
+    [ 1 -eq $errexit ] || { set -e; }
+    [ 1 -eq $nounset ] || { set -o nounset; }
+    [ 0 -eq $xtrace ] || { set +x; }
+    return $RC
+}
+
+function clone_repos() {
+    export nounset=$(shopt -o nounset > /dev/null; echo $?) || true
+    export errexit=$(shopt -o errexit > /dev/null; echo $?) || true
+    export xtrace=$(shopt -o xtrace > /dev/null; echo $?) || true
+    [ 1 -eq $errexit ] || { set +e; }
+    [ 1 -eq $nounset ] || { set +o nounset; }
+
+    # b2b-cli can clone the repos
+    [ "${CLONE_DEPLOYMENT_SOURCES:-yes}" != "no" ] || {
+        return 0
+    }
+
+    CONFIG_FILE="$1"
+    [ ! -z "$CONFIG_FILE" ] || {
+        echo "ERROR: CONFIG_FILE was not provided";
+        return 1
+    }
+
+    RC=0
+    repos_and_branches $CONFIG_FILE
+    RC=$?
+    [ 0 -eq $RC ] || {
+      echo "ERROR: repos_and_branches failed with RC=$RC";
+      # We ignore the error here since we are only phase 2 of the transitions
+      # RC=0
+      # We enforce the error in phase 3 of the transitions
+      [ 1 -eq $errexit ] || { set -e; }
+      [ 1 -eq $nounset ] || { set -o nounset; }
+      [ 0 -eq $xtrace ] || { set +x; }
+      return $RC
+    }
+
+    [ 0 -eq $RC -a ! -z "$REPOS_AND_BRANCHES" ] || {
+      echo "ERROR: REPOS_AND_BRANCHES is not set";
+      RC=1
+    }
+
+    [ 0 -eq $RC -a ! -z "$B2B_INFRASTRUCTURE_WORKSPACE_DIR" ] || {
+      echo "ERROR: B2B_INFRASTRUCTURE_WORKSPACE_DIR is not set";
+      RC=2
+    }
+
+    [ 0 -eq $RC ] || {
+      echo "ERROR: clone_repos failed with RC=$RC";
+      [ 1 -eq $errexit ] || { set -e; }
+      [ 1 -eq $nounset ] || { set -o nounset; }
+      [ 0 -eq $xtrace ] || { set +x; }
+      return $RC
+    }
+
+    [ ! -z "$GITHUB_TOKEN" ] || export GITHUB_TOKEN=${CI_GITHUB_TOKEN:-$(echo $CI_ACCESS_TOKEN | cut -d : -f 2 2>/dev/null)}
+    echo "++++++++++++++++++++++++++++++++++++++++++++++++++"
+    echo "                   Clone repos"
+    local ERRORS=""
+    CLONES=""
+    for repo_branch in $REPOS_AND_BRANCHES ; do
+      cd $GITHUB_WORKSPACE
+
+      repo=$(echo $repo_branch | cut -d: -f1)
+      branch=$(echo $repo_branch | cut -d: -f2)
+
+      echo "> Repository: git@github.com:SandsB2B/${repo}.git"
+      [ -d  $B2B_INFRASTRUCTURE_WORKSPACE_DIR/${repo} ] || {
+        git clone git@github.com:SandsB2B/${repo}.git $(basename $B2B_INFRASTRUCTURE_WORKSPACE_DIR)/${repo};
+      }
+
+      if [ -d  $B2B_INFRASTRUCTURE_WORKSPACE_DIR/${repo} ] ; then
+          cd $B2B_INFRASTRUCTURE_WORKSPACE_DIR/${repo}
+          git branch
+          if [ -z "$(git tag | egrep -e "^$branch\$" 2>/dev/null)" ] ; then
+            git checkout ${branch}
+          else
+            ref=$(git rev-list -n 1 $branch)
+            git branch --no-track tag-$branch $ref
+            git checkout tag-$branch
+            branch=tag-$branch
+          fi
+          [ "$(git branch --show-current 2>/dev/null | tr -d ' ')" == "${branch}" ] || {
+            echo "ERROR: ${branch} failed";
+            ERRORS="$ERRORS ${repo}:${branch}";
+          }
+      else
+          echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+          echo "ERROR: git clone ${repo} failed";
+          echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+          ERRORS="$ERRORS $CONFIG_FILE";
+      fi
+      CLONES="$CLONES $repo"
+      echo "< Done with ${repo}"
+
+      cd $GITHUB_WORKSPACE
+
+    done
+    echo "                Done cloning repos"
+    echo "--------------------------------------------------"
+    if [ ! -z "$ERRORS" ] ; then
+        echo "ERROR: repos failed to clone"
+        for error in $ERRORS ; do
+            echo $error
+        done
+        RC=66
+    fi
+    export CLONES
+    [ 1 -eq $errexit ] || { set -e; }
+    [ 1 -eq $nounset ] || { set -o nounset; }
+    [ 0 -eq $xtrace ] || { set +x; }
+    return $RC
+}
+
+function filter_config_file() {
+  echo "Default config file filter" >&2
+  echo "$1"
+}
+
+function check_environment_manifest() {
+    [ ! -z "${CHECK_DEPLOYMENT_MANIFEST:-}" ] || return 0
+    export nounset=$(shopt -o nounset > /dev/null; echo $?) || true
+    export errexit=$(shopt -o errexit > /dev/null; echo $?) || true
+    export xtrace=$(shopt -o xtrace > /dev/null; echo $?) || true
+    [ 1 -eq $errexit ] || { set +e; }
+    [ 1 -eq $nounset ] || { set +o nounset; }
+
+    CONFIG_FILE="$1"
+    [ ! -z "$CONFIG_FILE" ] || {
+        echo "ERROR: CONFIG_FILE was not provided";
+        return 1
+    }
+
+    if [ "${CLONE_DEPLOYMENT_SOURCES:-yes}" != "no" ] ; then
+      echo "++++++++++++++++++++++++++++++++++++++++++++++++++"
+      echo "> Check deployment manifest"
+      local ERRORS=""
+      local RC=0
+      if [ -f "$CONFIG_FILE" ] ; then
+          echo ">> $CONFIG_FILE"
+          yq .metadata.version $CONFIG_FILE
+          RC=$?
+          [ $RC -eq 0 ] || {
+              echo "ERROR: environment manifest check failed with RC=$RC";
+              ERRORS="$ERRORS environment manifest:$CONFIG_FILE";
+          }
+          b2b deployment manifest --manifest=$CONFIG_FILE --log-level=WARNING --verbose ${B2B_OPTIONS}  || true
+          echo "<< $CONFIG_FILE"
+      else
+          echo "ERROR: $CONFIG_FILE does not exist";
+          ERRORS="$ERRORS file:$CONFIG_FILE";
+      fi
+      echo "< Check environment manifest"
+      echo "--------------------------------------------------"
+      [ -z "$ERRORS" ] || {
+          echo "ERROR: Problems checking environment manifest(RC=$RC):"
+          for error in $ERRORS ; do
+              echo $error
+          done
+          echo ""
+      }
+    fi
+    [ 1 -eq $errexit ] || { set -e; }
+    [ 1 -eq $nounset ] || { set -o nounset; }
+    [ 0 -eq $xtrace ] || { set +x; }
+    return $RC
+}
+
+function check_github_environment() {
+    export nounset=$(shopt -o nounset > /dev/null; echo $?) || true
+    export errexit=$(shopt -o errexit > /dev/null; echo $?) || true
+    export xtrace=$(shopt -o xtrace > /dev/null; echo $?) || true
+    [ 1 -eq $errexit ] || { set +e; }
+    [ 1 -eq $nounset ] || { set +o nounset; }
+
+
+    ENVIRONMENT_NAME="$1"
+    [ ! -z "$ENVIRONMENT_NAME" ] || {
+        echo "ERROR: ENVIRONMENT_NAME was not provided";
+        return 1
+    }
+
+    echo "> Github environment $ENVIRONMENT_NAME"
+    #set -x
+    export GITHUB_TOKEN_SAVED=$GITHUB_TOKEN
+##    [ ! -z "$GITHUB_TOKEN" ] || export GITHUB_TOKEN=${CI_GITHUB_TOKEN:-$(echo $CI_ACCESS_TOKEN | cut -d : -f 2 2>/dev/null)}
+#    gh auth status
+#    curl -L -s \
+#    -H "Accept: application/vnd.github+json" \
+#    -H "Authorization: Bearer $GITHUB_TOKEN" \
+#    -H "X-GitHub-Api-Version: 2022-11-28" \
+#    https://api.github.com/repos/${GITHUB_REPOSITORY}/environments
+
+#    export GITHUB_TOKEN=${CI_GITHUB_TOKEN:-$(echo $CI_ACCESS_TOKEN | cut -d : -f 2 2>/dev/null)}
+#    gh auth status
+#    curl -L -s \
+#    -H "Accept: application/vnd.github+json" \
+#    -H "Authorization: Bearer $CI_GITHUB_TOKEN" \
+#    -H "X-GitHub-Api-Version: 2022-11-28" \
+#    https://api.github.com/repos/${GITHUB_REPOSITORY}/environments
+
+    curl -L -s \
+    -H "Accept: application/vnd.github+json" \
+    -H "Authorization: Bearer $CI_GITHUB_TOKEN" \
+    -H "X-GitHub-Api-Version: 2022-11-28" \
+    https://api.github.com/repos/${GITHUB_REPOSITORY}/environments?per_page=100 > /tmp/environments.json
+    RC=$?
+    [ $RC -eq 0 ] || {
+        echo "ERROR: check_github_environment $ENVIRONMENT_NAME failed with RC=$RC";
+        [ -z "$CI_TRACE" ] || { read x; }
+    }
+
+    [ 0 -eq $RC -a ! -z "$(jq ".environments[] | select(.name == \"$ENVIRONMENT_NAME\")" /tmp/environments.json 2>/dev/null)" ] || {
+      echo "ERROR: Github deployment environment $ENVIRONMENT_NAME was not found!";
+      RC=5;
+    }
+
+    export GITHUB_TOKEN=$GITHUB_TOKEN_SAVED
+    echo "< Done check_github_environment $ENVIRONMENT_NAME with RC=$RC"
+
+    [ 1 -eq $errexit ] || { set -e; }
+    [ 1 -eq $nounset ] || { set -o nounset; }
+    [ 0 -eq $xtrace ] || { set +x; }
+    return $RC
+
+    # The "repo scoped token" is painful so we force people to make the environment via UI
+#    [ ! -z "$GITHUB_ACCESS_TOKEN" ] || { echo "ERROR: Set GITHUB_ACCESS_TOKEN please"; return 5;}
+#
+#    curl -L -X PUT \
+#    -H "Accept: application/vnd.github+json" \
+#    -H "Authorization: token $GITHUB_ACCESS_TOKEN" \
+#    -H "X-GitHub-Api-Version: 2022-11-28" \
+#    https://api.github.com/repos/${GITHUB_REPOSITORY}/environments/$ENVIRONMENT_NAME \
+#    -d '{"deployment_branch_policy": null}'
+#    RC=$?
+#    [ $RC -eq 0 ] || {
+#        echo "ERROR: Github environment check $ENVIRONMENT_NAME failed with RC=$RC";
+#        [ -z "$CI_TRACE" ] || { read x; }
+#    }
+##    [ -z "$CI_TRACE" ] || { read x; }
+#    [ 1 -eq $errexit ] || { set -e; }
+#    [ 1 -eq $nounset ] || { set -o nounset; }
+#    [ 0 -eq $xtrace ] || { set +x; }
+#    return $RC
+}
+
+function invoke_workflow_for_environment() {
+    export nounset=$(shopt -o nounset > /dev/null; echo $?) || true
+    export errexit=$(shopt -o errexit > /dev/null; echo $?) || true
+    export xtrace=$(shopt -o xtrace > /dev/null; echo $?) || true
+    [ 1 -eq $errexit ] || { set +e; }
+    [ 1 -eq $nounset ] || { set +o nounset; }
+
+    local ENVIRONMENT_NAME="$1"
+    [ ! -z "$ENVIRONMENT_NAME" ] || {
+        echo "ERROR: ENVIRONMENT_NAME was not provided";
+        return 1
+    }
+    local TEST="$2"
+    [ ! -z "$TEST" ] || {
+        TEST=false
+    }
+
+    check_github_environment $ENVIRONMENT_NAME
+    RC=$?
+    [ $RC -eq 0 ] || {
+        echo "ERROR: check_github_environment $ENVIRONMENT_NAME failed with RC=$RC";
+        #[ -z "$CI_TRACE" ] || { read x; }
+        return $RC
+    }
+    [ 1 -eq $xtrace ] || { echo xtrace=$xtrace; set -x; }
+
+    echo "> $ENVIRONMENT_NAME namespace from $GITHUB_WORKSPACE/config/$ENVIRONMENT_NAME.yaml"
+    [ 1 -eq $xtrace ] || ls -al $GITHUB_WORKSPACE/config/$ENVIRONMENT_NAME.yaml
+    export NAMESPACE=$(yq .metadata.deployment.application_name $GITHUB_WORKSPACE/config/$ENVIRONMENT_NAME.yaml 2>/dev/null)
+    [ ! -z "$NAMESPACE" -a "null" != "$NAMESPACE" ] || {
+      echo "> $ENVIRONMENT_NAME namespace from $B2B_INFRASTRUCTURE_WORKSPACE_DIR/b2b-infrastructure/config/$ENVIRONMENT_NAME.toml"
+      [ 1 -eq $xtrace ] || ls -al $B2B_INFRASTRUCTURE_WORKSPACE_DIR/b2b-infrastructure/config/$ENVIRONMENT_NAME.toml
+      NAMESPACE=$(yq .k8s_namespace $B2B_INFRASTRUCTURE_WORKSPACE_DIR/b2b-infrastructure/config/$ENVIRONMENT_NAME.toml 2>/dev/null)
+    }
+    [ ! -z "$NAMESPACE" -a "null" != "$NAMESPACE" ] || {
+      echo "> $ENVIRONMENT_NAME namespace from $B2B_INFRASTRUCTURE_WORKSPACE_DIR/b2b-infrastructure/config/$ENVIRONMENT_NAME.toml"
+      [ 1 -eq $xtrace ] || ls -al $B2B_INFRASTRUCTURE_WORKSPACE_DIR/b2b-infrastructure/config/$ENVIRONMENT_NAME.toml
+      NAMESPACE=live-dealer-$(yq .k8s_cluster_short_name $B2B_INFRASTRUCTURE_WORKSPACE_DIR/b2b-infrastructure/config/$ENVIRONMENT_NAME.toml 2>/dev/null)
+    }
+    cat <<EOF >/tmp/data.json
+{
+  "ref": "$GITHUB_REF_NAME",
+  "inputs": {
+    "namespace": "$NAMESPACE",
+    "environment": "$ENVIRONMENT_NAME",
+    "test": $TEST
+  }
+}
+EOF
+    cat /tmp/data.json # [ 1 -eq $xtrace ] ||
+
+    [ ! -z "$GITHUB_TOKEN" -o ! -z "$CI_GITHUB_TOKEN" -o ! -z "$CI_ACCESS_TOKEN" ] || { echo "ERROR: Set GITHUB_TOKEN please"; exit 1; }
+    [ ! -z "$GITHUB_TOKEN" ] || export GITHUB_TOKEN=${CI_GITHUB_TOKEN:-$(echo $CI_ACCESS_TOKEN | cut -d : -f 2 2>/dev/null)}
+
+    [ 1 -eq $xtrace ] || echo GITHUB_REPOSITORY=$GITHUB_REPOSITORY
+    curl -s -X GET https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows \
+    -H "Accept: application/vnd.github+json" \
+    -H "X-GitHub-Api-Version: 2022-11-28" \
+    -H "Authorization: Bearer $CI_GITHUB_TOKEN" >/tmp/workflows.json
+
+    WORKFLOW_ID=$(jq '.workflows[] | select(.path == ".github/workflows/deploy-to-environment.yaml").id' /tmp/workflows.json 2>/dev/null)
+    [ ! -z "$WORKFLOW_ID" ] || {
+        echo "ERROR: deploy-to-environment workflow not found";
+        cat /tmp/workflows.json
+        return 6
+    }
+
+    curl -s -X POST https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/workflows/$WORKFLOW_ID/dispatches \
+    -H "Accept: application/vnd.github+json" \
+    -H "X-GitHub-Api-Version: 2022-11-28" \
+    -H "Authorization: Bearer $CI_GITHUB_TOKEN" \
+    --data "@/tmp/data.json"
+
+    RC=$?
+    echo "< Done invoke_workflow_for_environment $ENVIRONMENT_NAME $TEST with RC=$RC"
+
+    [ 1 -eq $errexit ] || { set -e; }
+    [ 1 -eq $nounset ] || { set -o nounset; }
+    [ 0 -eq $xtrace ] || { set +x; }
+    return $RC
+}
+
+function handle_exemptions() {
+    export nounset=$(shopt -o nounset > /dev/null; echo $?) || true
+    export errexit=$(shopt -o errexit > /dev/null; echo $?) || true
+    export xtrace=$(shopt -o xtrace > /dev/null; echo $?) || true
+    [ 1 -eq $errexit ] || { set +e; }
+    [ 1 -eq $nounset ] || { set +o nounset; }
+
+    local repo=$1
+    [ ! -z "$repo"] || repo=$(basename $PWD)
+    #echo "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
+    #echo "!!!                      DO NOT MODIFY THIS DEFAULT HANDLER                         !!!"
+    echo "                                                                                       "
+    echo "    This default handler does not exempt any git status changes to $repo "
+    echo "                  Create a custom handler for your                                    ";
+    echo "                     feature branch in cicd/rc/handle_exemptions.rc                    ";
+    echo "                                                                                       "
+    #echo "!!!                      DO NOT MODIFY THIS DEFAULT HANDLER                         !!!"
+    #echo "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
+    [ 1 -eq $errexit ] || { set -e; }
+    [ 1 -eq $nounset ] || { set -o nounset; }
+    [ 0 -eq $xtrace ] || { set +x; }
+}
+[ ! -f $GITHUB_WORKSPACE/cicd/rc/handle_exemptions.rc 2>/dev/null ] || . $GITHUB_WORKSPACE/cicd/rc/handle_exemptions.rc
+
+function check_repos() {
+    export nounset=$(shopt -o nounset > /dev/null; echo $?) || true
+    export errexit=$(shopt -o errexit > /dev/null; echo $?) || true
+    export xtrace=$(shopt -o xtrace > /dev/null; echo $?) || true
+    [ 1 -eq $errexit ] || { set +e; }
+    [ 1 -eq $nounset ] || { set +o nounset; }
+
+
+    [ ! -z "$REPOS_AND_BRANCHES" ] || {
+      echo "ERROR: REPOS_AND_BRANCHES is not set";
+      return 1
+    }
+
+    [ ! -z "$B2B_INFRASTRUCTURE_WORKSPACE_DIR" ] || {
+      echo "ERROR: B2B_INFRASTRUCTURE_WORKSPACE_DIR is not set";
+      return 1
+    }
+
+    echo "++++++++++++++++++++++++++++++++++++++++++++++++++"
+    echo "                   Check repos"
+    local ERRORS=""
+    RC=0
+    for repo_branch in ${REPOS_AND_BRANCHES} ; do
+      cd $GITHUB_WORKSPACE
+
+      repo=$(echo $repo_branch | cut -d: -f1)
+      branch=$(echo $repo_branch | cut -d: -f2)
+
+      echo "> Repository: git@github.com:SandsB2B/${repo}.git"
+
+      if [ -d  $B2B_INFRASTRUCTURE_WORKSPACE_DIR/${repo} ] ; then
+          cd $B2B_INFRASTRUCTURE_WORKSPACE_DIR/${repo}
+          git branch
+          git status
+          handle_exemptions
+          rc=$?
+          [ $rc -eq 0 ] || {
+              echo "ERROR: handle_exemptions $repo failed with rc=$rc";
+              ERRORS="$ERRORS handle_exemptions:${repo}";
+              RC=$rc
+          }
+          git status -u
+          [ -z "$(git status --porcelain)" ] || {
+            echo "ERROR: ${repo} has uncommitted changes";
+            ERRORS="$ERRORS ${repo}:${branch}";
+            RC=$((RC + 10))
+            git diff
+          }
+      else
+          echo "ERROR: git check repo ${repo} failed";
+          ERRORS="$ERRORS $B2B_INFRASTRUCTURE_WORKSPACE_DIR/${repo}";
+          #[ -z "$CI_TRACE" ] || { read x; }
+      fi
+      echo "< Done checking ${repo}"
+
+      cd $GITHUB_WORKSPACE
+      #[ -z "$CI_TRACE" ] || { read x; }
+    done
+    [ $RC -eq 0 -a -z $ERRORS ] || {
+        echo "ERROR: $(echo $ERRORS | wc -w) Problems checking $repo(RC=$RC):"
+        for error in $ERRORS ; do
+            echo "> $error"
+        done
+        echo "<"
+    }
+    echo "            Done checking repos"
+    echo "--------------------------------------------------"
+    #[ -z "$CI_TRACE" ] || { read x; }
+    [ 1 -eq $errexit ] || { set -e; }
+    [ 1 -eq $nounset ] || { set -o nounset; }
+    [ 0 -eq $xtrace ] || { set +x; }
+    return $RC
+}
+
+function reset_repos() {
+    export nounset=$(shopt -o nounset > /dev/null; echo $?) || true
+    export errexit=$(shopt -o errexit > /dev/null; echo $?) || true
+    export xtrace=$(shopt -o xtrace > /dev/null; echo $?) || true
+    [ 1 -eq $errexit ] || { set +e; }
+    [ 1 -eq $nounset ] || { set +o nounset; }
+
+
+    [ ! -z "$REPOS_AND_BRANCHES" ] || {
+      echo "ERROR: REPOS_AND_BRANCHES is not set";
+      return 1
+    }
+
+    [ ! -z "$B2B_INFRASTRUCTURE_WORKSPACE_DIR" ] || {
+      echo "ERROR: B2B_INFRASTRUCTURE_WORKSPACE_DIR is not set";
+      return 1
+    }
+
+    echo "++++++++++++++++++++++++++++++++++++++++++++++++++"
+    echo "                   Reset repos"
+    local ERRORS=""
+    RC=0
+    for repo_branch in ${REPOS_AND_BRANCHES} ; do
+      cd $GITHUB_WORKSPACE
+
+      repo=$(echo $repo_branch | cut -d: -f1)
+      branch=$(echo $repo_branch | cut -d: -f2)
+
+      echo "> Repository: git@github.com:SandsB2B/${repo}.git"
+
+      if [ -d  $B2B_INFRASTRUCTURE_WORKSPACE_DIR/${repo} ] ; then
+          cd $B2B_INFRASTRUCTURE_WORKSPACE_DIR/${repo}
+          git reset --hard HEAD
+          git status -u
+          [ -z "$(git status --porcelain)" ] || {
+            echo "ERROR: ${repo} has uncommitted changes";
+            ERRORS="$ERRORS ${repo}:${branch}";
+            RC=$((RC + 10))
+          }
+      else
+          echo "ERROR: git reset repo ${repo} failed";
+          ERRORS="$ERRORS $B2B_INFRASTRUCTURE_WORKSPACE_DIR/${repo}";
+      fi
+      echo "< Done resetting ${repo}"
+
+      cd $GITHUB_WORKSPACE
+    done
+    [ $RC -eq 0 -a -z $ERRORS ] || {
+        echo "ERROR: $(echo $ERRORS | wc -w) Problems resetting $repo(RC=$RC):"
+        for error in $ERRORS ; do
+            echo "> $error"
+        done
+        echo "<"
+    }
+    echo "            Done resetting repos"
+    echo "--------------------------------------------------"
+    [ 1 -eq $errexit ] || { set -e; }
+    [ 1 -eq $nounset ] || { set -o nounset; }
+    [ 0 -eq $xtrace ] || { set +x; }
+    return $RC
+}
+
+function test_deployment_of_config() {
+    export nounset=$(shopt -o nounset > /dev/null; echo $?) || true
+    export errexit=$(shopt -o errexit > /dev/null; echo $?) || true
+    export xtrace=$(shopt -o xtrace > /dev/null; echo $?) || true
+    [ 1 -eq $errexit ] || { set +e; }
+    [ 1 -eq $nounset ] || { set +o nounset; }
+
+
+    CONFIG_FILE="$1"
+    [ ! -z "$CONFIG_FILE" ] || {
+        echo "ERROR: CONFIG_FILE was not provided";
+        return 1
+    }
+
+    [ ! -z "$B2B_INFRASTRUCTURE_WORKSPACE_DIR" ] || {
+      prepare
+      RC=$?
+      [ $RC -eq 0 ] || {
+          echo "ERROR: prepare failed with RC=$RC";
+          return $RC
+      }
+    }
+
+    [ ! -z "$CLONES" -a "${CLONE_DEPLOYMENT_SOURCES:-yes}" != "no" ] || {
+      clone_repos $CONFIG_FILE
+      RC=$?
+      [ $RC -eq 0 ] || {
+          echo "ERROR: clone_repos failed with RC=$RC";
+          return $RC
+      }
+    }
+
+    check_environment_manifest $CONFIG_FILE
+    RC=$?
+    [ $RC -eq 0 ] || {
+        echo "ERROR: environment manifest check failed with RC=$RC";
+        #[ -z "$CI_TRACE" ] || { read x; }
+        return $RC
+    }
+
+    echo "++++++++++++++++++++++++++++++++++++++++++++++++++"
+    echo "> Test manifest $CONFIG_FILE"
+
+    [ ! -z "$TEMPLATE_SOURCES" ] || {
+      echo "ERROR: TEMPLATE_SOURCES is not set";
+      [ -z "$CI_TRACE" ] || { read x; }
+      return 9
+    }
+    [ ! -z "$B2B_INFRASTRUCTURE_WORKSPACE_DIR" -a -d $B2B_INFRASTRUCTURE_WORKSPACE_DIR -a -d $B2B_INFRASTRUCTURE_WORKSPACE_DIR/ldx_deploy_templates ] || {
+      echo "ERROR: B2B_INFRASTRUCTURE_WORKSPACE_DIR is not set correctly";
+      [ -z "$CI_TRACE" ] || { read x; }
+      return 9
+    }
+    [ ! -z "$B2B_INFRASTRUCTURE_ROOT_DIR" -a -d $B2B_INFRASTRUCTURE_ROOT_DIR ] || {
+      echo "ERROR: B2B_INFRASTRUCTURE_ROOT_DIR is not set correctly";
+      [ -z "$CI_TRACE" ] || { read x; }
+      return 9
+    }
+
+    echo b2b deployment create --deployments=:all: \
+    --repository=$GITHUB_REPOSITORY --deployment-manifest=$CONFIG_FILE \
+    --template-sources=$TEMPLATE_SOURCES \
+    --overwrite-if-exists --clean-up ${B2B_DEBUG} --do-it ${B2B_OPTIONS}
+    b2b deployment create --deployments=:all: \
+    --repository=$GITHUB_REPOSITORY --deployment-manifest=$CONFIG_FILE \
+    --template-sources=$TEMPLATE_SOURCES \
+    --overwrite-if-exists --clean-up ${B2B_DEBUG} --do-it ${B2B_OPTIONS}
+    RC=$?
+    [ $RC -eq 0 ] || {
+        echo "ERROR: b2b deployment create failed with RC=$RC";
+        ERRORS="$ERRORS b2b deployment create:$CONFIG_FILE";
+        [ -z "$CI_TRACE" ] || { read x; }
+    }
+    #[ -z "$CI_TRACE" ] || { read x; }
+    check_repos
+    RC=$?
+    reset_repos
+    RC=$((RC + $?))
+
+    echo "<         Done testing $CONFIG_FILE"
+    echo "--------------------------------------------------"
+    #[ -z "$CI_TRACE" ] || { read x; }
+
+    [ -z "$ERRORS" ] || {
+        echo "ERROR: Problems testing $CONFIG_FILE(RC=$RC):"
+        for error in $ERRORS ; do
+            echo $error
+        done
+        echo ""
+        [ 0 -ne $RC ] || {
+            RC=1
+        }
+    }
+    [ 1 -eq $errexit ] || { set -e; }
+    [ 1 -eq $nounset ] || { set -o nounset; }
+    [ 0 -eq $xtrace ] || { set +x; }
+    return $RC
+}
+
+function test_deployment_of_environment() {
+    export nounset=$(shopt -o nounset > /dev/null; echo $?) || true
+    export errexit=$(shopt -o errexit > /dev/null; echo $?) || true
+    export xtrace=$(shopt -o xtrace > /dev/null; echo $?) || true
+    [ 1 -eq $errexit ] || { set +e; }
+    [ 1 -eq $nounset ] || { set +o nounset; }
+
+
+    ENVIRONMENT_NAME="$1"
+    [ ! -z "$ENVIRONMENT_NAME" ] || {
+        echo "ERROR: ENVIRONMENT_NAME was not provided";
+        return 1
+    }
+
+    RC=0
+    # If the branch is not main and the branch and config_file don't match, then exit 1
+    [ "$GITHUB_REF_NAME" == "main" -o "$GITHUB_REF_NAME" == "$ENVIRONMENT_NAME" ] || {
+        [ ! -f "$GITHUB_WORKSPACE/config/$ENVIRONMENT_NAME.yaml" ] || {
+            echo "ERROR: branch '$GITHUB_REF_NAME' is not allowed to invoke workflow for enviroment $ENVIRONMENT_NAME";
+            RC=2
+        }
+        [ $RC -ne 0 ] || {
+            echo "INFO: Skipping $ENVIRONMENT_NAME workflow test for feature branch $GITHUB_REF_NAME";
+        }
+    }
+
+    [ $RC -eq 0 ] && {
+        echo "> Test environment $ENVIRONMENT_NAME"
+
+        invoke_workflow_for_environment $ENVIRONMENT_NAME true
+        RC=$?
+        [ $RC -eq 0 ] || {
+            echo "ERROR: invoke_workflow_for_environment $ENVIRONMENT_NAME true failed with RC=$RC";
+            #[ -z "$CI_TRACE" ] || { read x; }
+        }
+
+        echo "< Done testing $ENVIRONMENT_NAME with RC=$RC"
+    }
+    [ 1 -eq $errexit ] || { set -e; }
+    [ 1 -eq $nounset ] || { set -o nounset; }
+    [ 0 -eq $xtrace ] || { set +x; }
+    return $RC
+}
+
+function test_deployments() {
+    export nounset=$(shopt -o nounset > /dev/null; echo $?) || true
+    export errexit=$(shopt -o errexit > /dev/null; echo $?) || true
+    export xtrace=$(shopt -o xtrace > /dev/null; echo $?) || true
+    [ 1 -eq $errexit ] || { set +e; }
+    [ 1 -eq $nounset ] || { set +o nounset; }
+
+
+    prepare
+    RC=$?
+    [ $RC -eq 0 ] || {
+        echo "ERROR: prepare failed with RC=$RC";
+        return $RC
+    }
+
+    clone_repos $(ls config/*.yaml)
+    RC=$?
+    [ $RC -eq 0 ] || {
+        echo "ERROR: clone_repos failed with RC=$RC";
+        return $RC
+    }
+
+    echo "=================================================="
+    echo "> Test all manifests, all deployments"
+    cd $GITHUB_WORKSPACE
+    local ERRORS=""
+    local RC=0
+    for CONFIG_FILE in config/*.yaml ; do
+        test_deployment_of_config $CONFIG_FILE
+        rc=$?
+        [ $rc -eq 0 ] || {
+            echo "ERROR: test_deployment_of_config $CONFIG_FILE failed with rc=$rc";
+            ERRORS="$ERRORS test_deployment_of_config:$CONFIG_FILE";
+            RC=$((RC + 1))
+        }
+    done
+
+    echo "< Done testing all manifests"
+    echo "=================================================="
+
+    set +o errexit
+    [ -z "$ERRORS" ] || {
+        echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+        echo "Environment manifests with errors:"
+        for error in $ERRORS ; do
+            echo $error
+        done
+        echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+        RC=6
+    }
+    [ 1 -eq $errexit ] || { set -e; }
+    [ 1 -eq $nounset ] || { set -o nounset; }
+    [ 0 -eq $xtrace ] || { set +x; }
+    return $RC
+}
+
+function test_environments() {
+    export nounset=$(shopt -o nounset > /dev/null; echo $?) || true
+    export errexit=$(shopt -o errexit > /dev/null; echo $?) || true
+    export xtrace=$(shopt -o xtrace > /dev/null; echo $?) || true
+    [ 1 -eq $errexit ] || { set +e; }
+    [ 1 -eq $nounset ] || { set +o nounset; }
+
+
+    prepare
+    RC=$?
+    [ $RC -eq 0 ] || {
+        echo "ERROR: prepare failed with RC=$RC";
+        return $RC
+    }
+
+    echo "=================================================="
+    echo "> Test all environments"
+
+    local ERRORS=""
+    local RC=0
+    for CONFIG_FILE in config/*.yaml ; do
+        ENVIRONMENT_NAME=$(basename $CONFIG_FILE .yaml)
+        echo "++++++++++++++++++++++++++++++++++++++++++++++++++"
+        test_deployment_of_environment $ENVIRONMENT_NAME
+        rc=$?
+        [ $rc -eq 0 ] || {
+            if [ $rc -eq 2 ] ; then # branch is not allowed to invoke workflow for enviroment
+                echo "WARNING: test_deployment_of_environment $ENVIRONMENT_NAME failed with rc=$rc";
+                test_deployment_of_config $CONFIG_FILE
+                rc=$?
+                [ $rc -eq 0 ] || {
+                    echo "ERROR: test_deployment_of_config $CONFIG_FILE failed with rc=$rc";
+                    ERRORS="$ERRORS test_deployment_of_config:$CONFIG_FILE";
+                    RC=$((RC + 1))
+                    #[ -z "$CI_TRACE" ] || { read x; }
+                }
+            else # Other errors we are not prepared to compensate for
+                echo "ERROR: test_deployment_of_environment $ENVIRONMENT_NAME failed with rc=$rc";
+                ERRORS="$ERRORS test_deployment_of_config:$CONFIG_FILE";
+                RC=$((RC + 1))
+            fi
+        }
+        echo "--------------------------------------------------"
+    done
+    echo "< Done testing all environments"
+    echo "=================================================="
+
+    set +o errexit
+    [ -z "$ERRORS" ] || {
+        echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+        echo "Environment manifests with errors:"
+        for error in $ERRORS ; do
+            echo $error
+        done
+        echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+        RC=7
+    }
+    #[ -z "$CI_TRACE" ] || { read x; }
+    [ 1 -eq $errexit ] || { set -e; }
+    [ 1 -eq $nounset ] || { set -o nounset; }
+    [ 0 -eq $xtrace ] || { set +x; }
+    return $RC
+}
+
+function create_deployment_of_config() {
+    export nounset=$(shopt -o nounset > /dev/null; echo $?) || true
+    export errexit=$(shopt -o errexit > /dev/null; echo $?) || true
+    export xtrace=$(shopt -o xtrace > /dev/null; echo $?) || true
+    [ 1 -eq $errexit ] || { set +e; }
+    [ 1 -eq $nounset ] || { set +o nounset; }
+
+
+    CONFIG_FILE="$1"
+    [ ! -z "$CONFIG_FILE" ] || {
+        echo "ERROR: CONFIG_FILE was not provided";
+        return 1
+    }
+
+    [ ! -z "$B2B_INFRASTRUCTURE_WORKSPACE_DIR" ] || {
+      prepare
+      RC=$?
+      [ $RC -eq 0 ] || {
+          echo "ERROR: prepare failed with RC=$RC";
+          return $RC
+      }
+    }
+
+    [ ! -z "$CLONES" ] || {
+      clone_repos $CONFIG_FILE
+      RC=$?
+      [ $RC -eq 0 ] || {
+          echo "ERROR: clone_repos failed with RC=$RC";
+          return $RC
+      }
+    }
+
+    check_environment_manifest $CONFIG_FILE
+    RC=$?
+    [ $RC -eq 0 ] || {
+        echo "ERROR: environment manifest check failed with RC=$RC";
+        #[ -z "$CI_TRACE" ] || { read x; }
+        return $RC
+    }
+    echo "> Create deployment: $CONFIG_FILE"
+    echo ">> Filter $CONFIG_FILE"
+    CONFIG_FILE_="$(filter_config_file $CONFIG_FILE 2>/dev/null)"
+    if [ -z "$CONFIG_FILE_" -o ! -f "$CONFIG_FILE_" ] ; then
+      echo "WARNING: $CONFIG_FILE filtered('$CONFIG_FILE_'). Skipping ..."
+      return 1
+    fi
+
+#    echo "=== Starting xtrace ==="
+#    [ 0 -eq $xtrace ] || { echo xtrace=$xtrace; set -x; }
+
+    ENVIRONMENT_NAME=${ENVIRONMENT_NAME:-$(basename $CONFIG_FILE_ .yaml)}
+    echo ">> ENVIRONMENT_NAME: $ENVIRONMENT_NAME"
+    # If the environment is locked or disabled, then error
+    if [ -z "$(egrep $ENVIRONMENT_NAME $GITHUB_WORKSPACE/disabled-environments.txt 2>/dev/null)" ] ; then
+        # If the branch is not main and the branch and config_file don't match, then error
+        if [ "$B2B_GITHUB_REF_NAME_ENVIRONMENT_NAME_ENFORCED" == "false" -o "$GITHUB_REF_NAME" == "main" -o "$GITHUB_REF_NAME" == "$ENVIRONMENT_NAME" ] ; then
+            echo ">> Deploying $CONFIG_FILE_"
+
+            echo -n "+++ Manifest version:"
+            yq .metadata.version $CONFIG_FILE_
+            RC=$?
+            [ $RC -eq 0 ] || {
+                echo "ERROR: environment manifest check failed with RC=$RC";
+                ERRORS="$ERRORS .metadata.version:$CONFIG_FILE_";
+                continue
+            }
+
+            cmd="b2b deployment create --environment=$ENVIRONMENT_NAME --deployments=:all: \
+            --repository=$GITHUB_REPOSITORY --deployment-manifest=$CONFIG_FILE_ \
+            --template-sources=$TEMPLATE_SOURCES \
+            --overwrite-if-exists --clean-up --pull --commit --push --do-it ${B2B_OPTIONS}"
+            echo $cmd
+            [ 1 -eq $xtrace ] || { set | sort; }
+            $cmd
+            RC=$?
+            [ $RC -eq 0 ] || {
+                echo "ERROR: b2b deployment create failed with RC=$RC";
+                ERRORS="$ERRORS $CONFIG_FILE_";
+            }
+        else
+            echo "ERROR: branch '$GITHUB_REF_NAME' is not allowed to update enviroment $ENVIRONMENT_NAME";
+            ERRORS="$ERRORS $GITHUB_REF_NAME:${CONFIG_FILE}";
+        fi
+    else
+        echo "WARNING: enviroment $ENVIRONMENT_NAME is locked or disabled  "
+        RC=3
+    fi
+    echo "<< Done $CONFIG_FILE_"
+    [ -z "$ERRORS" ] || {
+        echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+        echo "Deployments with errors:"
+        for error in $ERRORS ; do
+            echo $error
+        done
+        echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+        RC=9
+    }
+    [ 1 -eq $errexit ] || { set -e; }
+    [ 1 -eq $nounset ] || { set -o nounset; }
+    [ 0 -eq $xtrace ] || { set +x; }
+    return $RC
+}
+
+function create_deployment_of_environment() {
+    export nounset=$(shopt -o nounset > /dev/null; echo $?) || true
+    export errexit=$(shopt -o errexit > /dev/null; echo $?) || true
+    export xtrace=$(shopt -o xtrace > /dev/null; echo $?) || true
+    [ 1 -eq $errexit ] || { set +e; }
+    [ 1 -eq $nounset ] || { set +o nounset; }
+
+
+    ENVIRONMENT_NAME="$1"
+    [ ! -z "$ENVIRONMENT_NAME" ] || {
+        echo "ERROR: ENVIRONMENT_NAME was not provided";
+        return 1
+    }
+
+    echo "> Deploy to environment $ENVIRONMENT_NAME"
+    BRANCH=${LDX_DEPLOY_BRANCH:-$ENVIRONMENT_NAME}
+    RC=0
+    if [ "$B2B_GITHUB_REF_NAME_ENVIRONMENT_NAME_ENFORCED" == "false" -o "$GITHUB_REF_NAME" == "main" -o "$GITHUB_REF_NAME" == "$BRANCH" ] ; then
+        # If the environment is locked or disabled, then error
+        if [ -z "$(egrep $ENVIRONMENT_NAME $GITHUB_WORKSPACE/disabled-environments.txt 2>/dev/null)" ] ; then
+            # If the branch is not main and the branch and config_file doesn't match, then error
+            invoke_workflow_for_environment $ENVIRONMENT_NAME false
+            RC=$?
+            [ $RC -eq 0 ] || {
+                echo "ERROR: invoke_workflow_for_environment $ENVIRONMENT_NAME false failed with RC=$RC";
+            }
+
+            echo "< Done deployment to $ENVIRONMENT_NAME with RC=$RC"
+        else
+            echo "WARNING: enviroment $ENVIRONMENT_NAME is locked or disabled  "
+            RC=3
+        fi
+    else
+        echo "WARNING: branch '$GITHUB_REF_NAME' != '$BRANCH'; B2B_GITHUB_REF_NAME_ENVIRONMENT_NAME_ENFORCED=$B2B_GITHUB_REF_NAME_ENVIRONMENT_NAME_ENFORCED";
+        RC=5
+        [ ! -f "$GITHUB_WORKSPACE/config/$ENVIRONMENT_NAME.yaml" ] || {
+            echo "WARNING: '$GITHUB_WORKSPACE/config/$ENVIRONMENT_NAME.yaml' not here!";
+            #RC=2 [2024-02-19 Christo] Not treating as an error anymore
+        }
+        [ $RC -ne 0 ] || {
+            echo "INFO: Skipping $ENVIRONMENT_NAME($BRANCH) for feature branch $GITHUB_REF_NAME";
+        }
+    fi
+
+    [ 1 -eq $errexit ] || { set -e; }
+    [ 1 -eq $nounset ] || { set -o nounset; }
+    [ 0 -eq $xtrace ] || { set +x; }
+    return $RC
+}
+
+function update_environments() {
+    export nounset=$(shopt -o nounset > /dev/null; echo $?) || true
+    export errexit=$(shopt -o errexit > /dev/null; echo $?) || true
+    export xtrace=$(shopt -o xtrace > /dev/null; echo $?) || true
+    [ 1 -eq $errexit ] || { set +e; }
+    [ 1 -eq $nounset ] || { set +o nounset; }
+
+
+    prepare
+    RC=$?
+    [ $RC -eq 0 ] || {
+        echo "ERROR: prepare failed with RC=$RC";
+        return $RC
+    }
+
+    # A reasonable default for CONFIG_FILES is all the config files in the config directory
+    [ ! -z "$CONFIG_FILES" ] || CONFIG_FILES="$(ls config/*.yaml 2>/dev/null)"
+
+    if [ "$PHASE" == "2" ] ; then
+      clone_repos $CONFIG_FILES
+      RC=$?
+      [ $RC -eq 0 ] || {
+          echo "ERROR: clone_repos failed with RC=$RC";
+          return $RC
+      }
+    fi
+
+    echo "=================================================="
+    echo "             Update environments"
+    echo "Updated environment manifests:"
+    # If not set at all then initialize to a known value
+    CONFIG_FILES=${CONFIG_FILES:-""}  # This is VERY unlikely to be the case
+    # Show us "entering" all the config files
+    for CONFIG_FILE in $CONFIG_FILES ; do
+        echo "> $CONFIG_FILE"
+    done
+
+    local ERRORS=""
+    local RC=0
+    for CONFIG_FILE in $CONFIG_FILES ; do
+        ENVIRONMENT_NAME=$(basename $CONFIG_FILE .yaml)
+        echo "++++++++++++++++++++++++++++++++++++++++++++++++++"
+        create_deployment_of_environment $ENVIRONMENT_NAME
+        rc=$?
+        [ $rc -eq 0 ] || {
+            echo "WARNING: create_deployment_of_environment $ENVIRONMENT_NAME failed with rc=$rc";
+            ERRORS="$ERRORS create_deployment_of_environment:$CONFIG_FILE";
+            RC=$((RC + 1))
+            ##[ -z "$CI_TRACE" ] || { read x; }
+        }
+        echo "--------------------------------------------------"
+    done
+    echo "   Done firing deployments for environments"
+    echo "=================================================="
+
+    set +o errexit
+    [ -z "$ERRORS" ] || {
+        echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+        echo "Environments with errors:"
+        for error in $ERRORS ; do
+            echo $error
+        done
+        echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+        RC=7
+    }
+    #[ -z "$CI_TRACE" ] || { read x; }
+    [ 1 -eq $errexit ] || { set -e; }
+    [ 1 -eq $nounset ] || { set -o nounset; }
+    [ 0 -eq $xtrace ] || { set +x; }
+    return $RC
+}
+
+function update_deployments() {
+    export nounset=$(shopt -o nounset > /dev/null; echo $?) || true
+    export errexit=$(shopt -o errexit > /dev/null; echo $?) || true
+    export xtrace=$(shopt -o xtrace > /dev/null; echo $?) || true
+    [ 1 -eq $errexit ] || { set +e; }
+    [ 1 -eq $nounset ] || { set +o nounset; }
+
+    RC=0
+    if [ ! -z "$CONFIG_FILES" ] ; then
+
+        prepare
+        RC=$?
+        [ $RC -eq 0 ] || {
+            echo "ERROR: prepare failed with RC=$RC";
+            return $RC
+        }
+
+        clone_repos $CONFIG_FILES
+        RC=$?
+        [ $RC -eq 0 ] || {
+            echo "ERROR: clone_repos failed with RC=$RC";
+            return $RC
+        }
+
+        echo "=================================================="
+        echo "> Process config files: $CONFIG_FILES"
+        ERRORS=""
+        for CONFIG_FILE in $CONFIG_FILES ; do
+            echo "++++++++++++++++++++++++++++++++++++++++++++++++++"
+            create_deployment_of_config $CONFIG_FILE
+            RC=$?
+            [ $RC -eq 0 ] || {
+                echo "ERROR: deployment $CONFIG_FILE failed with RC=$RC";
+                ERRORS="$ERRORS create_deployment_of_config:$CONFIG_FILE";
+                [ -z "$CI_TRACE" ] || { read x; }
+            }
+            echo "--------------------------------------------------"
+        done
+        echo "                      Done!"
+        echo "=================================================="
+    else
+        echo "WARNING: No config changes! Skipping deployments ..."
+    fi
+    [ -z "$ERRORS" ] || {
+        echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+        echo "Environment manifests with errors:"
+        for error in $ERRORS ; do
+            echo $error
+        done
+        echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+        RC=8
+    }
+    [ 1 -eq $errexit ] || { set -e; }
+    [ 1 -eq $nounset ] || { set -o nounset; }
+    [ 0 -eq $xtrace ] || { set +x; }
+    return $RC
+}
+
+function get_latest_workflow_id() {
+    PHASE_ID=$1
+    [ ! -z "$PHASE_ID" ] || {
+        echo "ERROR: PHASE_ID was not provided";
+        exit 1
+    }
+    [ ! -z "$GITHUB_REPOSITORY" ] || {
+        echo "ERROR: GITHUB_REPOSITORY was not provided";
+        exit 1
+    }
+    [ ! -z "$ENVIRONMENT_NAME" ] || {
+        echo "ERROR: ENVIRONMENT_NAME was not provided";
+        exit 1
+    }
+    BRANCH=${BRANCH:-$LDX_DEPLOY_BRANCH}
+    BRANCH=${BRANCH:-$ENVIRONMENT_NAME}
+    [ ! -z "$BRANCH" ] || {
+        echo "ERROR: BRANCH was not provided";
+        exit 1
+    }
+    #echo DEBUG=${DEBUG}
+    DEBUG=${DEBUG:-0}
+    [ $DEBUG -lt 1 ] || set -x
+
+    workflow_view_cmd="gh workflow view --repo $GITHUB_REPOSITORY $PHASE_ID"
+    [ $DEBUG -lt 2 ] || $workflow_view_cmd
+    #worklfow_view=$($workflow_view_cmd | egrep -e "($ENVIRONMENT_NAME|$BRANCH)" 2>/dev/null)
+    id=""
+    for_env=$($workflow_view_cmd | egrep -e "($ENVIRONMENT_NAME|$BRANCH)" 2>/dev/null | head -1 2>/dev/null)
+    [ -z "$for_env" ] || {
+      id=$(echo $for_env | rev | cut -d ' ' -f 1 | rev )
+      age=$(echo $for_env | rev | cut -d ' ' -f 2 | rev )
+    }
+    echo "$id $age"
+}
+
+function check_phase_action() {
+    export nounset=$(shopt -o nounset > /dev/null; echo $?) || true
+    export errexit=$(shopt -o errexit > /dev/null; echo $?) || true
+    export xtrace=$(shopt -o xtrace > /dev/null; echo $?) || true
+    [ 1 -eq $errexit ] || { set +e; }
+    [ 1 -eq $nounset ] || { set +o nounset; }
+
+    RC=0
+    PHASE_ID=$1
+    TIMEOUT=${2:-$WATCH_TIME_SECONDS}
+    STEP=${3:-10}
+    DEBUG=${4:-0}
+    PREVIOUS=${5:-}
+    [ ! -z "$PHASE_ID" ] || {
+        echo "ERROR: PHASE_ID was not provided";
+        exit 1
+    }
+
+    echo PREVIOUS=${PREVIOUS}
+    echo DEBUG=${DEBUG}
+    [ $DEBUG -lt 2 ] || set -x
+
+    [ ! -z "$ENVIRONMENT_NAME" ] || {
+        echo "ERROR: ENVIRONMENT_NAME was not provided";
+        exit 1
+    }
+    BRANCH=${BRANCH:-$LDX_DEPLOY_BRANCH}
+    BRANCH=${BRANCH:-$ENVIRONMENT_NAME}
+    [ ! -z "$BRANCH" ] || {
+        echo "ERROR: BRANCH was not provided";
+        exit 1
+    }
+
+    # ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+    if [ -z "$PREVIOUS" ] ; then
+      python scripts/github_workflow_utils.py run-check $([ $DEBUG -lt 1 ] && echo '' || echo '--verbose') $PHASE_ID
+    else
+      python scripts/github_workflow_utils.py run-check $([ $DEBUG -lt 1 ] && echo '' || echo '--verbose') --previous=$PREVIOUS $PHASE_ID
+    fi
+
+    [ $DEBUG -gt 1 ] || set +x
+    [ 1 -eq $errexit ] || { set -e; }
+    [ 1 -eq $nounset ] || { set -o nounset; }
+    [ 0 -eq $xtrace ] || { set +x; }
+    return $?
+
+    # ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+    sleep $STEP
+
+    in_progress=AlwaysEnterWhileLoop
+    status="not checked"
+    old=old
+    while [ -n "$in_progress" ]; do
+        [ $DEBUG -lt 1 ] || set -x
+        python scripts/github_workflow_utils.py run-last-id --output=json $PHASE_ID | tee /tmp/id_age.json
+        id=$(jq -r .run_id /tmp/id_age.json 2>/dev/null | tr -d '"')
+        age=$(jq -r .age /tmp/id_age.json 2>/dev/null | tr -d '"')
+        age_sec=$age
+#        id_age=$(get_latest_workflow_id $PHASE_ID)
+#        id=$(echo $id_age | cut -d ' ' -f 1)
+        # completed	success	fix: Ensure the first wf id we look at is fresh	Deploy to environment - phase 1	ld-csdev-5-use2	push	15s	14044178803
+        # Not "old" when our id differs from non-empty previous
+        [ ! -z "$PREVIOUS" -a "$id" == "$PREVIOUS" ] || old=""
+        # Calculate age when not "old"
+        [ -z "$old" ] || {
+#          age=$(echo $id_age | cut -d ' ' -f 2)
+#          age_sec=$(echo $age | egrep -e '^[0-9]+s$' 2>/dev/null | sed 's/s$//' 2>/dev/null)
+          [ -z "$age_sec" ] && age_sec=666
+          # Presume "old" until age < 60s
+          old=old
+          [ $age_sec -gt 60 ] || old=""
+        }
+        # If we have a run ID and not "old" check the run status
+        [ -z "$id" -a -z "$old" ] || {
+          python scripts/github_workflow_utils.py run-get --output=json --workflow-id=$PHASE_ID --run-id=$id >/tmp/phase_id.json
+          [ $DEBUG -lt 2 ] || {
+            python scripts/github_workflow_utils.py run-get --output=json --workflow-id=$PHASE_ID --run-id=$id $([ $DEBUG -lt 1 ] && echo '' || echo '--verbose') ;
+          }
+          RC=$?
+          [ 0 -eq $RC ] || {
+#            in_progress="";
+#            break;
+
+            curl -s -H "Accept: application/vnd.github+json" \
+              -H "Authorization: Bearer $CI_GITHUB_TOKEN" \
+              https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs/$id >/tmp/phase_id.json
+          }
+          [ $DEBUG -lt 1 ] || cat /tmp/phase_id.json | jq '{id, name, head_branch, status}'
+          status=$(cat /tmp/phase_id.json | jq -r '.status' | tr -d '"')
+          # Break out for a 404
+          [ "404" != "$status" ] || {
+            in_progress="";
+            RC=4;
+            break;
+          }
+          # Break out when "completed" or not "old"
+          [ "completed" != "$status" -o ! -z "$old" ] || {
+            in_progress="";
+            break;
+          }
+        }
+        [ $DEBUG -gt 1 ] || set +x
+        echo "T - ${TIMEOUT}s: $status"
+        sleep $STEP
+        TIMEOUT=$((TIMEOUT-$STEP))
+        [ $TIMEOUT -gt 0 ] || { echo "Timeout: Breaking out of the watch loop but the action will continue"; in_progress=""; RC=6; break; }
+    done
+
+    # ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+    if [ -z "$PREVIOUS" ] ; then
+      python scripts/github_workflow_utils.py run-check $([ $DEBUG -lt 1 ] && echo '' || echo '--verbose') $PHASE_ID
+    else
+      python scripts/github_workflow_utils.py run-check $([ $DEBUG -lt 1 ] && echo '' || echo '--verbose') --previous=$PREVIOUS $PHASE_ID
+    fi
+    # ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+    [ $DEBUG -gt 1 ] || set +x
+    [ 1 -eq $errexit ] || { set -e; }
+    [ 1 -eq $nounset ] || { set -o nounset; }
+    [ 0 -eq $xtrace ] || { set +x; }
+    return $RC
+}
+
+
+function deploy_deployment_manifest() {
+    export nounset=$(shopt -o nounset > /dev/null; echo $?) || true
+    export errexit=$(shopt -o errexit > /dev/null; echo $?) || true
+    export xtrace=$(shopt -o xtrace > /dev/null; echo $?) || true
+    [ 1 -eq $errexit ] || { set +e; }
+    [ 1 -eq $nounset ] || { set +o nounset; }
+
+    RC=0
+    export CONFIG_FILE=${1:-$CONFIG_FILE}
+    export ENVIRONMENT_NAME=${2:-$ENVIRONMENT_NAME}
+    export BRANCH=${3:-$GITHUB_REF_NAME}
+    export DEBUG=${DEBUG:-0}
+    echo DEBUG=${DEBUG}
+    [ $DEBUG -lt 2 ] || set -x
+
+    prepare
+
+    echo ''
+    echo ">>> Switch branches with sanity checking: ${BRANCH}"
+    echo ''
+    pwd
+    #pushd $GITHUB_WORKSPACE
+    #pwd
+
+    #git branch
+    #git checkout $BRANCH
+    RC=1
+    #git branch
+    [ 0 -eq $RC ] && {
+      echo ">>> Branch $BRANCH exists"
+      ln -s $GITHUB_WORKSPACE $B2B_INFRASTRUCTURE_WORKSPACE_DIR/ldx_deploy
+      RC=$?
+    } || {
+      clone_repos $CONFIG_FILE
+      RC=$?
+      [ 0 -eq $RC ] || { echo "ERROR: Failed to clone repos: $REPOS_AND_BRANCHES"; return $RC; }
+    }
+    git branch
+    pwd
+
+    echo ''
+    echo ">>> Work in ldx_deploy clone"
+    echo ''
+    #WORKFLOW_ID=$(gh workflow list --repo SandsB2B/ldx_deploy --json name,id | jq '.[] | select(.name | contains("Kargo gitops: deploy")) | .id')
+    #gh workflow view --repo $GITHUB_REPOSITORY $WORKFLOW_ID
+
+    #gh workflow list --repo $GITHUB_REPOSITORY --json name,id,path,state | jq .
+    #sleep 1
+
+    # cd ldx_deploy and verify that it is a good clone
+    [ ! -d "$B2B_INFRASTRUCTURE_WORKSPACE_DIR/ldx_deploy" ] && {
+      echo "WARNING: $B2B_INFRASTRUCTURE_WORKSPACE_DIR/ldx_deploy does not exist";
+    } || {
+      pushd $B2B_INFRASTRUCTURE_WORKSPACE_DIR/ldx_deploy;
+      pwd;
+    }
+    #ls -al
+    #git branch
+    [ -f VERSION ] || return 10
+    [ -f disabled-environments.txt ] || return 10
+    #git remote -v
+    #sleep 1
+    #bin/trigger.sh
+
+    [ -f $CONFIG_FILE ] || { echo "$CONFIG_FILE not found!"; return 66; }
+
+    [ $DEBUG -gt 1 ] || set +x
+    #set -x
+    echo ''
+    echo ">>> Update this $BRANCH branch for deployment manifest of $ENVIRONMENT_NAME"
+    echo ''
+    echo LDX_VERSION=${LDX_VERSION}
+    echo HELM_CHARTS_VERSION=${HELM_CHARTS_VERSION}
+    echo LDX_BRICKS=${LDX_BRICKS}
+    echo LDX_DEPLOY_TEMPLATES=${LDX_DEPLOY_TEMPLATES}
+    echo FLAG_DEPLOY=$FLAG_DEPLOY
+
+    echo GITHUB_REF_NAME=$GITHUB_REF_NAME
+    echo LDX_DEPLOY_BRANCH=$LDX_DEPLOY_BRANCH
+
+    git fetch --all --prune --prune-tags --tags $([ $DEBUG -lt 2 ] && echo '--quiet' || echo '')
+    RC=$?
+    git pull $([ $DEBUG -lt 2 ] && echo '--quiet' || echo '')
+    git pull --tags --force $([ $DEBUG -lt 2 ] && echo '--quiet' || echo '')
+    [ "true" == "$FLAG_DEPLOY" ] && {
+      # If any of the variables are provided then bump the version until we create a new version
+      if [ ! -z "${LDX_VERSION}${HELM_CHARTS_VERSION}${LDX_BRICKS}${LDX_DEPLOY_TEMPLATES}" ] ; then
+          #python scripts/bumpversion-cfg-environment-manifests.py
+          git tag >/tmp/tags.txt
+          #cat /tmp/tags.txt
+          tag=v$(cat VERSION)
+          while [ ! -z "$(grep $tag /tmp/tags.txt 2>/dev/null)" ]; do
+              version=$(cat VERSION)
+              bump2version patch --allow-dirty --no-tag --no-commit
+              RC=$?
+              [ $RC -eq 0 ] || { return $RC; }
+              if [ "$version" == "$(cat VERSION)" ]; then
+                  echo "ERROR: Failed to bump version"
+                  break
+              fi
+              tag=v$(cat VERSION)
+          done
+      fi
+      #set +x
+    }
+
+    [ $DEBUG -lt 2 ] && set +x || set -x
+    echo ''
+    echo ">>> Update the deployment manifest"
+    echo ''
+
+    [ $DEBUG -lt 2 ] || {
+      git diff $CONFIG_FILE
+    }
+    if [ -z "$LDX_VERSION" ] ; then
+        echo "LDX_VERSION not provided"
+    else
+      yq -i ".ldx.include_brick[0].attributes.version = \"$LDX_VERSION\"" $CONFIG_FILE
+    fi
+    if [ -z "$HELM_CHARTS_VERSION" ] ; then
+        echo "HELM_CHARTS_VERSION not provided"
+    else
+      yq -i ".metadata.deployment.helm_charts_version = \"$HELM_CHARTS_VERSION\"" $CONFIG_FILE
+    fi
+    if [ -z "$LDX_BRICKS" ] ; then
+        echo "LDX_BRICKS not provided"
+    else
+        yq -i ".metadata.deployment.deployment_sources.repositories.ldx_bricks = \"$LDX_BRICKS\"" $CONFIG_FILE
+    fi
+    if [ -z "$LDX_DEPLOY_TEMPLATES" ] ; then
+        echo "LDX_DEPLOY_TEMPLATES not provided"
+    else
+        yq -i ".metadata.deployment.deployment_sources.repositories.ldx_deploy_templates = \"$LDX_DEPLOY_TEMPLATES\"" $CONFIG_FILE
+    fi
+    [ $DEBUG -lt 2 ] || {
+      git diff $CONFIG_FILE
+    }
+
+    echo ''
+    echo ">>> Get old workflow id's for phase 1 and 2"
+    echo ''
+
+    [ $DEBUG -lt 2 ] && set +x || set -x
+    [ $DEBUG -lt 1 ] || {
+      python scripts/github_workflow_utils.py find --output=json "phase 1";
+    }
+    PHASE_1=$(python scripts/github_workflow_utils.py find --output=json "phase 1" | jq -r '.[] | .id')
+    [ $DEBUG -lt 1 ] || {
+      python scripts/github_workflow_utils.py find --output=json "phase 2";
+      }
+    PHASE_2=$(python scripts/github_workflow_utils.py find --output=json "phase 2" | jq -r '.[] | .id')
+
+#    PHASE_1=$(gh workflow list --repo SandsB2B/ldx_deploy --json name,id | jq -r '.[] | select(.name | contains("phase 1")) | .id')
+#    PHASE_2=$(gh workflow list --repo SandsB2B/ldx_deploy --json name,id | jq -r '.[] | select(.name | contains("phase 2")) | .id')
+
+    [ $DEBUG -lt 1 ] || {
+      python scripts/github_workflow_utils.py run-last-id --output=json $PHASE_1
+    p1_id=$(python scripts/github_workflow_utils.py run-last-id --output=json $PHASE_1 | jq -r '.run_id');
+    }
+    [ $DEBUG -lt 1 ] || {
+      python scripts/github_workflow_utils.py run-last-id --output=json $PHASE_2;
+    }
+    p2_id=$(python scripts/github_workflow_utils.py run-last-id --output=json $PHASE_2 | jq -r '.run_id')
+#    p1_id=$(get_latest_workflow_id $PHASE_1)
+#    p2_id=$(get_latest_workflow_id $PHASE_2)
+
+#    [ $DEBUG -lt 1 ] || set -x
+    [ $DEBUG -lt 2 ] && set +x || set -x
+    echo ''
+    echo ">>> Git add, commit, tag and push this $BRANCH branch for environment $ENVIRONMENT_NAME"
+    echo ''
+    [ $DEBUG -lt 2 ] || {
+      git status
+    }
+    # If there are no changes then skip
+    git diff --exit-code --stat || {
+        git diff $CONFIG_FILE
+        git add .
+        git commit -m "Deploy freight ${FREIGHT:-} to $ENVIRONMENT_NAME"
+        git tag v$(cat VERSION)
+        git push
+        git push --tags
+    }
+
+    [ "true" == "$FLAG_DEPLOY" ] && {
+      echo ''
+      echo ">>> Trigger phase 1"
+      echo ''
+      python scripts/github_workflow_utils.py dispatch --ref=$BRANCH --inputs=config_files:$CONFIG_FILE $PHASE_1 --output=styled
+      RC=$?
+      [ $RC -eq 0 ] || {
+        curl \
+          -H "Authorization: Bearer $CI_GITHUB_TOKEN" \
+          -H "X-GitHub-Api-Version: 2022-11-28" \
+          -H "Accept: application/vnd.github+json" \
+          -X POST \
+          -d "{ \"ref\": \"$ENVIRONMENT_NAME\", \"inputs\": { \"config_files\": \"$CONFIG_FILE\" } }" \
+          https://api.github.com/repos/SandsB2B/ldx_deploy/actions/workflows/deploy.yaml/dispatches
+      }
+      sleep 60
+      python scripts/github_workflow_utils.py run-last-id --output=styled $PHASE_1 $([ $DEBUG -lt 1 ] && echo '' || echo '--verbose')
+
+      echo ''
+      echo ">>> Check on the phase 1 of the deployment"
+      echo ''
+      python scripts/github_workflow_utils.py run-check $([ $DEBUG -lt 1 ] && echo '' || echo '--verbose') \
+        --previous=$p1_id $PHASE_1 --step=10 --timeout=${WATCH_TIME_SECONDS:-600}
+      # check_phase_action $PHASE_1 $WATCH_TIME_SECONDS 10 1 $p1_id
+
+      echo ''
+      echo ">>> Check that the phase 2 of the deployment kicked off"
+      echo ''
+      check_phase_action $PHASE_2 $WATCH_TIME_SECONDS 30 1 $p2_id
+    }
+    echo ''
+    echo "<<< Success"
+    echo ''
+
+    RC=0
+    [ $DEBUG -gt 1 ] || set +x
+    [ 1 -eq $errexit ] || { set -e; }
+    [ 1 -eq $nounset ] || { set -o nounset; }
+    [ 0 -eq $xtrace ] || { set +x; }
+    return $RC
+}
+
+
+function snapshot_deployment_manifest() {
+    export nounset=$(shopt -o nounset > /dev/null; echo $?) || true
+    export errexit=$(shopt -o errexit > /dev/null; echo $?) || true
+    export xtrace=$(shopt -o xtrace > /dev/null; echo $?) || true
+    [ 1 -eq $errexit ] || { set +e; }
+    [ 1 -eq $nounset ] || { set +o nounset; }
+
+    RC=0
+    export CONFIG_FILE=${1:-$CONFIG_FILE}
+    export ENVIRONMENT_NAME=${2:-$ENVIRONMENT_NAME}
+    export BRANCH=${3:-$LDX_DEPLOY_BRANCH}
+    export LDX_DEPLOY_VERSION=${4:-$LDX_DEPLOY_VERSION}
+    export DEBUG=${DEBUG:-0}
+    echo DEBUG=${DEBUG}
+    [ $DEBUG -lt 2 ] || set -x
+
+    prepare
+
+    echo ''
+    echo ">>> Switch branches with sanity checking: ${BRANCH}"
+    echo ''
+    git branch
+    pwd
+    pushd $GITHUB_WORKSPACE
+    #pwd
+
+    #git branch
+    #git checkout $BRANCH
+    RC=1
+    #git branch
+    [ 0 -eq $RC ] && {
+      echo "> Branch $BRANCH exists"
+      #ln -s $GITHUB_WORKSPACE $B2B_INFRASTRUCTURE_WORKSPACE_DIR/ldx_deploy
+      #RC=$?
+    }
+
+    echo ''
+    echo ">>> Clone repos: CLONE_DEPLOYMENT_SOURCES=${CLONE_DEPLOYMENT_SOURCES}; REPOS_AND_BRANCHES=${REPOS_AND_BRANCHES}"
+    echo ''
+    clone_repos $CONFIG_FILE
+    RC=$?
+    [ 0 -eq $RC ] || { echo "ERROR: Failed to clone repos: $REPOS_AND_BRANCHES"; return $RC; }
+
+    echo ''
+    echo ">>> Work in ldx_deploy clone"
+    echo ''
+    #WORKFLOW_ID=$(gh workflow list --repo SandsB2B/ldx_deploy --json name,id | jq '.[] | select(.name | contains("Kargo gitops: deploy")) | .id')
+    #gh workflow view --repo $GITHUB_REPOSITORY $WORKFLOW_ID
+
+    #gh workflow list --repo $GITHUB_REPOSITORY --json name,id,path,state | jq .
+    #sleep 1
+
+    # cd ldx_deploy and verify that it is a good clone
+    pushd $B2B_INFRASTRUCTURE_WORKSPACE_DIR/ldx_deploy
+    [ $DEBUG -lt 1 ] || {
+      pwd
+      ls -al
+      git branch
+      git remote -v
+    }
+    [ -f VERSION ] || return 10
+    [ -f disabled-environments.txt ] || return 10
+    [ -f $CONFIG_FILE ] || { echo "$CONFIG_FILE not found!"; return 66; }
+
+    [ $DEBUG -lt 1 ] || set -x
+    echo ''
+    echo ">>> Snapshot this $BRANCH branch for deployment manifest of $ENVIRONMENT_NAME"
+    echo ''
+    echo LDX_DEPLOY_VERSION=${LDX_DEPLOY_VERSION}
+    [ ! -z "$LDX_DEPLOY_VERSION" ] || { echo "LDX_DEPLOY_VERSION not provided"; return 11; }
+    git fetch --all --prune --prune-tags --tags $([ $DEBUG -lt 2 ] && echo '--quiet' || echo '')
+    LDX_VERSION=$(yq .ldx.version $CONFIG_FILE 2>/dev/null)
+    HELM_CHARTS_VERSION=$(yq .metadata.deployment.helm_charts_version $CONFIG_FILE 2>/dev/null)
+    LDX_BRICKS=$(yq .metadata.deployment.deployment_sources.repositories.ldx_bricks $CONFIG_FILE 2>/dev/null)
+    LDX_DEPLOY_TEMPLATES=$(yq .metadata.deployment.deployment_sources.repositories.ldx_deploy_templates $CONFIG_FILE 2>/dev/null)
+
+    echo ''
+    echo ">>> Work in ldx_manifests clone"
+    echo ''
+
+    popd
+    [ $DEBUG -lt 1 ] || {
+      pwd
+      ls -al
+      git branch
+      git remote -v
+    }
+    pushd $B2B_INFRASTRUCTURE_WORKSPACE_DIR/ldx_manifests
+    [ $DEBUG -lt 1 ] || {
+      pwd
+      ls -al
+      git branch
+      git remote -v
+    }
+    [ -f VERSION ] || return 10
+    [ -f .bumpversion.cfg ] || return 10
+
+    [ $DEBUG -gt 1 ] || set +x
+    echo ''
+    echo ">>> Update ldx_manifests"
+    echo ''
+    git fetch --all --prune --prune-tags --tags $([ $DEBUG -lt 2 ] && echo '--quiet' || echo '')
+
+    echo ''
+    echo ">> Snapshot this $BRANCH branch of ldx_deploy for deployment manifest of $ENVIRONMENT_NAME"
+    echo ''
+
+    [ $DEBUG -lt 1 ] || set -x
+    DEBUG=0 b2b deployment snapshot \
+      --environment=$ENVIRONMENT_NAME \
+      --manifest=$CONFIG_FILE \
+      --ldx-manifests=. \
+      --pull --no-commit --no-push --no-tag \
+      $([ $DEBUG -lt 1 ] && echo '' || echo '--verbose')
+    RC=$?
+    echo RC=$RC
+
+    [ $DEBUG -lt 2 ] || {
+      ls -al $B2B_INFRASTRUCTURE_WORKSPACE_DIR
+      ls -al $B2B_INFRASTRUCTURE_WORKSPACE_DIR/ldx_deploy_templates
+      ls -al $B2B_INFRASTRUCTURE_WORKSPACE_DIR/ldx_deploy_templates/templates
+    }
+    [ -d $B2B_INFRASTRUCTURE_WORKSPACE_DIR/ldx_deploy_templates ] && { pushd $B2B_INFRASTRUCTURE_WORKSPACE_DIR/ldx_deploy_templates; git branch; cat VERSION; popd; }
+    [ $RC -eq 0 ] || { return $RC; }
+
+    git diff --exit-code --stat || {
+      echo "> New tag for ldx_manifests"
+      python scripts/bumpversion-cfg-application-manifests.py
+      git tag >/tmp/tags.txt
+      [ $DEBUG -lt 1 ] || {
+        cat /tmp/tags.txt
+      }
+      tag=v$(cat VERSION)
+      while [ ! -z "$(grep $tag /tmp/tags.txt 2>/dev/null)" ]; do
+          version=$(cat VERSION)
+          bump2version patch --allow-dirty --no-tag --no-commit
+          RC=$?
+          [ $RC -eq 0 ] || { return $RC; }
+          if [ "$version" == "$(cat VERSION)" ]; then
+              echo "ERROR: Failed to bump version"
+              break
+          fi
+          tag=v$(cat VERSION)
+      done
+    }
+    [ $DEBUG -gt 1 ] || set +x
+
+    echo ''
+    echo ">>> Git add, commit, tag and push ldx_manifests($(cat VERSION)) for environment $ENVIRONMENT_NAME"
+    echo ''
+    [ $DEBUG -lt 1 ] || {
+      pwd
+      git status
+    }
+    # If there are no changes then skip
+    git diff --exit-code --stat || {
+        #git diff
+        git add .
+        git commit -m "Update application manifests from $ENVIRONMENT_NAME($CONFIG_FILE)"
+        git tag v$(cat VERSION)
+        git push
+        git push --tags
+    }
+
+    popd
+    [ $DEBUG -lt 1 ] || {
+      pwd
+      git branch
+      git remote -v
+    }
+
+    popd
+    [ $DEBUG -lt 1 ] || {
+      pwd
+      git branch
+      git remote -v
+    }
+
+    echo ''
+    echo "<<< Success"
+    echo ''
+
+    RC=0
+    [ $DEBUG -gt 1 ] || set +x
+    [ 1 -eq $errexit ] || { set -e; }
+    [ 1 -eq $nounset ] || { set -o nounset; }
+    [ 0 -eq $xtrace ] || { set +x; }
+    return $RC
+}
+
+
+function promote_deployment_manifest() {
+    export nounset=$(shopt -o nounset > /dev/null; echo $?) || true
+    export errexit=$(shopt -o errexit > /dev/null; echo $?) || true
+    export xtrace=$(shopt -o xtrace > /dev/null; echo $?) || true
+    [ 1 -eq $errexit ] || { set +e; }
+    [ 1 -eq $nounset ] || { set +o nounset; }
+
+    RC=0
+    export CONFIG_FILE=${1:-$CONFIG_FILE}
+    export ENVIRONMENT_NAME=${2:-$ENVIRONMENT_NAME}
+    export BRANCH=${3:-$GITHUB_REF_NAME}
+    export DEBUG=${DEBUG:-0}
+    echo DEBUG=${DEBUG}
+    [ $DEBUG -lt 2 ] || set -x
+
+    prepare
+
+    git branch
+    pwd
+
+    echo ''
+    echo ">>> Work in ldx_deploy clone"
+    echo ''
+    ls -al
+    [ -f VERSION ] || return 10
+    [ -f disabled-environments.txt ] || return 10
+    #git remote -v
+
+    [ -f $CONFIG_FILE ] || { echo "$CONFIG_FILE not found!"; return 66; }
+
+    [ $DEBUG -gt 1 ] || set +x
+    #set -x
+    echo ''
+    echo ">>> Update this $BRANCH branch for deployment manifest of $ENVIRONMENT_NAME"
+    echo ''
+    export LDX_MANIFESTS_VERSION=$(echo $LDX_MANIFESTS_TAG | sed 's/^v//')
+    export LDX_MANIFESTS_TAG=v${LDX_MANIFESTS_VERSION}
+
+    echo LDX_MANIFESTS_TAG=${LDX_MANIFESTS_TAG}
+    echo LDX_MANIFESTS_VERSION=${LDX_MANIFESTS_VERSION}
+    echo GITHUB_REF_NAME=$GITHUB_REF_NAME
+    echo LDX_DEPLOY_BRANCH=$LDX_DEPLOY_BRANCH
+    echo FLAG_DEPLOY=$FLAG_DEPLOY
+
+    git fetch --all --prune --prune-tags --tags $([ $DEBUG -lt 2 ] && echo '--quiet' || echo '')
+    RC=$?
+    git pull $([ $DEBUG -lt 2 ] && echo '--quiet' || echo '')
+    git pull --tags --force $([ $DEBUG -lt 2 ] && echo '--quiet' || echo '')
+    [ "true" == "$FLAG_DEPLOY" ] && {
+      # If any of the variables are provided then bump the version until we create a new version
+      if [ ! -z "${LDX_MANIFESTS_VERSION}${LDX_MANIFESTS_TAG}" ] ; then
+          python scripts/bumpversion-cfg-deployment-manifests.py
+          git tag >/tmp/tags.txt
+          #cat /tmp/tags.txt
+          tag=v$(cat VERSION)
+          while [ ! -z "$(grep $tag /tmp/tags.txt 2>/dev/null)" ]; do
+              version=$(cat VERSION)
+              bump2version patch --allow-dirty --no-tag --no-commit
+              RC=$?
+              [ $RC -eq 0 ] || { return $RC; }
+              if [ "$version" == "$(cat VERSION)" ]; then
+                  echo "ERROR: Failed to bump version"
+                  break
+              fi
+              tag=v$(cat VERSION)
+          done
+      fi
+      #set +x
+    }
+
+    [ $DEBUG -lt 2 ] && set +x || set -x
+    echo ''
+    echo ">>> Update the deployment manifest"
+    echo ''
+
+    [ $DEBUG -lt 2 ] || {
+      git diff $CONFIG_FILE
+    }
+    [ $DEBUG -lt 1 ] && set +x || set -x
+    if [ -z "$LDX_MANIFESTS_VERSION" ] ; then
+        echo "LDX_MANIFESTS_VERSION not provided"
+    else
+        yq -i ".manifests[0].version = \"$LDX_MANIFESTS_VERSION\"" $CONFIG_FILE
+        yq -i ".manifests[1].version = \"$LDX_MANIFESTS_VERSION\"" $CONFIG_FILE
+        yq -i ".manifests[2].version = \"$LDX_MANIFESTS_VERSION\"" $CONFIG_FILE || true
+        ldx_manifests_version=$(yq ".metadata.deployment.deployment_sources.repositories.ldx_manifests" $CONFIG_FILE)
+        [ -z "$(egrep "v[0-9]+\.[0-9]+\.[0-9]+" $ldx_manifests_version 2>/dev/null)" ] || {
+          yq -i ".metadata.deployment.deployment_sources.repositories.ldx_manifests = \"$LDX_MANIFESTS_TAG\"" $CONFIG_FILE || true
+        }
+    fi
+
+    [ $DEBUG -lt 2 ] || {
+      git diff $CONFIG_FILE
+    }
+
+    echo ''
+    echo ">>> Get old workflow id's for phase 1 and 2"
+    echo ''
+
+    [ $DEBUG -lt 2 ] && set +x || set -x
+    [ $DEBUG -lt 1 ] || {
+      python scripts/github_workflow_utils.py find --output=json "phase 1";
+    }
+    PHASE_1=$(python scripts/github_workflow_utils.py find --output=json "phase 1" | jq -r '.[] | .id')
+    [ $DEBUG -lt 1 ] || {
+      python scripts/github_workflow_utils.py find --output=json "phase 2";
+      }
+    PHASE_2=$(python scripts/github_workflow_utils.py find --output=json "phase 2" | jq -r '.[] | .id')
+
+#    PHASE_1=$(gh workflow list --repo SandsB2B/ldx_deploy --json name,id | jq -r '.[] | select(.name | contains("phase 1")) | .id')
+#    PHASE_2=$(gh workflow list --repo SandsB2B/ldx_deploy --json name,id | jq -r '.[] | select(.name | contains("phase 2")) | .id')
+
+    [ $DEBUG -lt 1 ] || {
+      python scripts/github_workflow_utils.py run-last-id --output=json $PHASE_1
+    p1_id=$(python scripts/github_workflow_utils.py run-last-id --output=json $PHASE_1 | jq -r '.run_id');
+    }
+    [ $DEBUG -lt 1 ] || {
+      python scripts/github_workflow_utils.py run-last-id --output=json $PHASE_2;
+    }
+    p2_id=$(python scripts/github_workflow_utils.py run-last-id --output=json $PHASE_2 | jq -r '.run_id')
+#    p1_id=$(get_latest_workflow_id $PHASE_1)
+#    p2_id=$(get_latest_workflow_id $PHASE_2)
+
+#    [ $DEBUG -lt 1 ] || set -x
+    [ $DEBUG -lt 2 ] && set +x || set -x
+    echo ''
+    echo ">>> Git add, commit, tag and push this $BRANCH branch for environment $ENVIRONMENT_NAME"
+    echo ''
+    [ $DEBUG -lt 2 ] || {
+      git status
+    }
+    # If there are no changes then skip
+    git diff --exit-code --stat || {
+        git diff $CONFIG_FILE
+        git add .
+        git commit -m "Deploy freight ${FREIGHT:-} to $ENVIRONMENT_NAME"
+        git tag v$(cat VERSION)
+        git push
+        git push --tags
+    }
+
+    [ "true" == "$FLAG_DEPLOY" ] && {
+      echo ''
+      echo ">>> Trigger phase 1"
+      echo ''
+      python scripts/github_workflow_utils.py dispatch --ref=$BRANCH --inputs=config_files:$CONFIG_FILE $PHASE_1 --output=styled
+      RC=$?
+      [ $RC -eq 0 ] || {
+        curl \
+          -H "Authorization: Bearer $CI_GITHUB_TOKEN" \
+          -H "X-GitHub-Api-Version: 2022-11-28" \
+          -H "Accept: application/vnd.github+json" \
+          -X POST \
+          -d "{ \"ref\": \"$ENVIRONMENT_NAME\", \"inputs\": { \"config_files\": \"$CONFIG_FILE\" } }" \
+          https://api.github.com/repos/SandsB2B/ldx_deploy/actions/workflows/deploy.yaml/dispatches
+      }
+      sleep 60
+      python scripts/github_workflow_utils.py run-last-id --output=styled $PHASE_1 $([ $DEBUG -lt 1 ] && echo '' || echo '--verbose')
+
+      echo ''
+      echo ">>> Check on the phase 1 of the deployment"
+      echo ''
+      python scripts/github_workflow_utils.py run-check $([ $DEBUG -lt 1 ] && echo '' || echo '--verbose') \
+        --previous=$p1_id $PHASE_1 --step=10 --timeout=${WATCH_TIME_SECONDS:-600}
+      # check_phase_action $PHASE_1 $WATCH_TIME_SECONDS 10 1 $p1_id
+    }
+    echo ''
+    echo ">>> Check that the phase 2 of the deployment kicked off"
+    echo ''
+    check_phase_action $PHASE_2 $WATCH_TIME_SECONDS 30 1 $p2_id
+
+    echo ''
+    echo "<<< Success"
+    echo ''
+
+    RC=0
+    [ $DEBUG -gt 1 ] || set +x
+    [ 1 -eq $errexit ] || { set -e; }
+    [ 1 -eq $nounset ] || { set -o nounset; }
+    [ 0 -eq $xtrace ] || { set +x; }
+    return $RC
+}

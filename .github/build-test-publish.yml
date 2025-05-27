@@ -1,0 +1,156 @@
+name: Build, Test and Publish
+
+on:
+  push:
+    branches:
+    - "*"
+#  pull_request:
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+permissions:
+  id-token: write # This is required for requesting the JWT
+  contents: write  # This is required for actions/checkout
+  packages: write  # This is required for publishing packages
+  deployments: write  # This is required for creating deployments
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-publish:
+    strategy:
+      matrix:
+        # Put the version we consider mainline and publish with last
+        python-version: [ "3.12", "3.11" ]
+        os: [macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      GITHUB_TOKEN: ${{ secrets.CI_GITHUB_TOKEN }}
+      CI_GPG_KEY: ${{ secrets.CI_GPG_KEY }}
+      CI_SSH_KEY: ${{ secrets.CI_SSH_KEY }}
+      AWS_REGION_TOOLS: "us-east-2"
+      AWS_ACCOUNT_TOOLS: "433714148419"
+      AWS_PROFILE_TOOLS: "cloud-services-prod"
+      PYTHON_KEYRING_BACKEND: keyring.backends.null.Keyring
+      JIRA_API_KEY: ${{ secrets.JIRA_API_KEY }}
+      JIRA_USERNAME: ${{ secrets.JIRA_USERNAME }}
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        # Number of commits to fetch. 0 indicates all history for all branches and tags.
+        # Default: 1
+        fetch-depth: 1
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      id: setup_python
+      with:
+        python-version: ${{ matrix.python-version }}
+        #cache: poetry
+
+    - name: Install poetry
+      run: |
+        echo python-path:'${{ steps.setup_python.outputs.python-path }}'
+        ${{ steps.setup_python.outputs.python-path }} --version
+        ${{ steps.setup_python.outputs.python-path }} -m pip install poetry==1.8.5
+      shell: bash
+
+    - name: configure-aws-credentials
+      uses: SandsB2B/configure-aws-credentials-action@main
+      with:
+        role_name: "github-codeartifact-readwrite"
+        account_id: "433714148419"
+        aws_region: "us-east-2"
+        aws_profile: "cloud-services-prod"
+
+    - name: Check AWS profiles
+      continue-on-error: false
+      run: |
+        set  +e
+        aws configure list-profiles
+        aws sts get-caller-identity --profile=$AWS_PROFILE_TOOLS
+
+        set | egrep -e '^(AWS_|CI_)'
+      shell: bash
+
+    - name: Set up access to CodeArtifact
+      run: |
+        [ type aws_setup_codeartifact_access 2>/dev/null ] || . $GITHUB_WORKSPACE/cicd/rc/configure_aws_codeartifact.rc
+        aws_setup_codeartifact_access
+      shell: bash
+
+    - name: Install dependencies
+      run: |
+        #poetry env use ${{ matrix.python-version }}
+        poetry check --lock
+        poetry config --list
+
+        #poetry install --with main,dev,test --no-ansi --no-interaction --verbose
+        poetry install --with main,dev,test --no-ansi --no-interaction || {
+          poetry install --with main,dev,test --no-ansi --no-interaction;
+        }
+        poetry run pip list
+      shell: bash
+
+    - name: Set up SSH
+      run: |
+        [ type setup_git_config 2>/dev/null ] || . $GITHUB_WORKSPACE/cicd/rc/setup_github_actions_git.rc
+        [ type fix_git_remote 2>/dev/null ] || . $GITHUB_WORKSPACE/cicd/rc/setup_github_actions_git.rc
+        [ -f ~/.ssh/id_ed25519 ] || {
+            RC=0
+            setup_gpg_key
+            RC=$((RC + $?))
+            setup_ssh_config
+            RC=$((RC + $?))
+            setup_git_config
+            RC=$((RC + $?))
+            [ 0 -eq $RC ] || {
+                echo "ERROR: setup_gpg_key, setup_ssh_config, setup_git_config failed with RC=$RC";
+                exit 1
+            }
+        }
+      shell: bash
+
+    - name: Test coverage
+      run: |
+        #poetry env use ${{ matrix.python-version }}
+        poetry env info
+        
+        gh version
+        gh auth status
+        
+        set -x
+        poetry install --with main,dev,test --no-ansi --no-interaction --verbose
+        echo poetry run poe test-cov
+
+        #export COVERAGE_RCFILE=$GITHUB_WORKSPACE/.coveragerc
+        export COVERAGE_FILE=$GITHUB_WORKSPACE/coverage/.coverage
+
+        set -x
+        set +e
+        poetry run coverage run -m pytest -vv tests || { echo 'Tests failed'; exit 1; };
+        poetry run coverage combine --keep || true;
+        #poetry run coverage html -d coverage --ignore-errors 2>/dev/null  || true;
+        poetry run coverage report --show-missing --ignore-errors 2>/dev/null ;
+      shell: bash
+
+    - name: Poetry build and publish
+      if: matrix.python-version == '3.12' && matrix.os == 'ubuntu-latest'
+      run: |
+        #poetry env use ${{ matrix.python-version }}
+        poetry env info
+        poetry build
+        poetry publish -r codeartifact
+
+    - name: Component and Versions
+      if: matrix.python-version == '3.11' && matrix.os == 'ubuntu-latest'
+      run: |
+        #export LOG_LEVEL=DEBUG
+
+        export DEBUG=yes
+        export VERBOSE=yes
+        poetry run $GITHUB_WORKSPACE/scripts/jira-component-and-version.py
+      shell: bash
