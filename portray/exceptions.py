@@ -23,7 +23,5 @@ class DocumentationAlreadyExists(PortrayError):
     """Thrown when portray has been told to output documentation where it already exists"""
 
     def __init__(self, directory: str):
-        super().__init__(
-            self, f"Documentation already exists in '{directory}'. Use --overwrite to ignore"
-        )
+        super().__init__(self, f"Documentation already exists in '{directory}'. Use --overwrite to ignore")
         self.directory = directory

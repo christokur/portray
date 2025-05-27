@@ -1,378 +1,498 @@
-# PDOCS Product Requirements Document
+# Portray Product Requirements Document
 
 ## 1. Introduction
 
-This Product Requirements Document (PRD) outlines the specifications and requirements for "pdocs", a Python documentation generation tool. Pdocs is designed to discover and document the public interface of Python modules and packages, generating comprehensive documentation in both HTML and Markdown formats.
+This Product Requirements Document (PRD) outlines the specifications and requirements for "Portray", a Python documentation website generation tool. Portray is designed to create
+comprehensive documentation websites for Python projects by combining manual documentation with auto-generated API reference documentation.
 
-This document serves as the central reference for all stakeholders involved in the development, implementation, and maintenance of pdocs. It defines the product's purpose, features, technical requirements, and success criteria.
+This document serves as the central reference for all stakeholders involved in the development, implementation, and maintenance of Portray. It defines the product's purpose,
+features, technical requirements, and success criteria.
 
-## 2. Product overview
+## 2. Product Overview
 
-Pdocs is a library and command-line program that auto-generates API documentation for Python modules by analyzing module docstrings and code structure. Unlike other documentation tools that require special syntax rules or separate documentation files, pdocs works with standard Python docstrings and automatically generates well-structured documentation.
+Portray is a library and command-line tool that generates complete documentation websites for Python projects with minimal configuration. Unlike traditional documentation tools
+that focus solely on API documentation or require extensive setup, Portray combines the power of MkDocs for rendering beautiful documentation websites with pdocs for automatic API
+reference generation.
 
-The tool respects Python conventions such as `__all__` for defining public interfaces and provides special mechanisms like `__pdocs__` for documenting identifiers where docstrings are not appropriate. Pdocs distinguishes itself by focusing on simplicity, automation, and integration with existing Python codebases.
+The tool operates on the principle of "zero-configuration" - it can generate a comprehensive documentation website by simply running `portray` in a Python project directory. It
+automatically discovers project structure, includes README files, processes manual documentation, and generates API references, all while producing a professional, searchable
+website.
 
-## 3. Goals and objectives
+## 3. Goals and Objectives
 
-### 3.1 Primary goals
+### 3.1 Primary Goals
 
-- Create a documentation tool that requires minimal configuration to produce high-quality documentation
-- Support both HTML and Markdown output formats without requiring special syntax beyond standard Python docstrings
-- Provide both a command-line interface and a programmable API for generating documentation
-- Generate documentation that is accurate, complete, and reflects the actual code structure
+- Create a documentation tool that requires zero configuration to produce professional documentation websites
+- Combine manual documentation (Markdown files) with auto-generated API documentation seamlessly
+- Provide both static HTML generation and live development server capabilities
+- Enable one-command deployment to GitHub Pages and other hosting platforms
 - Make documentation generation an effortless part of the Python development workflow
+- Support modern documentation features like search, theming, and responsive design
 
-### 3.2 Success metrics
+### 3.2 Success Metrics
 
-- Complete documentation generation for 99% of Python modules without manual intervention
-- Support for all standard Python docstring formats (Google, NumPy, reStructuredText)
-- 95% or higher test coverage for core functionality
-- Reduced time to generate documentation compared to alternative tools
+- Complete documentation website generation for 95% of Python projects without any configuration
+- Successful integration of manual docs and API references in a unified navigation structure
+- Sub-30-second documentation generation for typical Python projects
+- 90% or higher user satisfaction with generated documentation appearance and functionality
+- Reduced time to publish documentation compared to manual setup of MkDocs + API documentation tools
 
-## 4. Target audience
+## 4. Target Audience
 
-### 4.1 Primary users
+### 4.1 Primary Users
 
-- Python developers who need to document their libraries and packages
-- Open source maintainers who want to provide comprehensive API documentation
-- Technical writers who work with Python codebases
+- Python developers who want comprehensive project documentation websites
+- Open source maintainers who need both user guides and API documentation
+- Development teams requiring consistent documentation across multiple Python projects
+- Technical writers working with Python codebases who need both manual and auto-generated content
 
-### 4.2 Secondary users
+### 4.2 Secondary Users
 
-- Users of documented Python libraries who consume the generated documentation
-- Development teams who need consistent documentation across multiple Python projects
-- Continuous integration systems that automatically generate documentation
+- Users of documented Python libraries who consume the generated documentation websites
+- Project managers who need documentation status visibility
+- Continuous integration systems that automatically generate and deploy documentation
+- Documentation hosting platforms (GitHub Pages, Netlify, etc.)
 
-## 5. Features and requirements
+## 5. Features and Requirements
 
-### 5.1 Core functionality
+### 5.1 Core Functionality
 
-#### 5.1.1 Documentation generation
+#### 5.1.1 Website Generation
 
-- **REQ-1.1.1:** The system shall generate documentation from Python module docstrings.
-- **REQ-1.1.2:** The system shall support both Markdown and HTML as output formats.
-- **REQ-1.1.3:** The system shall traverse the abstract syntax tree to find docstrings for modules, classes, functions, methods, and variables.
-- **REQ-1.1.4:** The system shall respect the `__all__` variable when determining the public interface of a module.
-- **REQ-1.1.5:** The system shall support the special variable `__pdocs__` to document identifiers where docstrings aren't appropriate.
+- **REQ-1.1.1:** The system shall generate complete documentation websites combining manual documentation with API references.
+- **REQ-1.1.2:** The system shall use MkDocs as the underlying documentation site generator.
+- **REQ-1.1.3:** The system shall use pdocs for automatic API reference documentation generation.
+- **REQ-1.1.4:** The system shall support zero-configuration operation with intelligent project detection.
+- **REQ-1.1.5:** The system shall automatically include project README.md as the home page.
+- **REQ-1.1.6:** The system shall process all .md files in the project root and configured directories.
+- **REQ-1.1.7:** The system shall generate unified navigation combining manual docs and API references.
 
-#### 5.1.2 Documentation rendering
+#### 5.1.2 Theme and Presentation
 
-- **REQ-1.2.1:** The system shall render documentation with standard Markdown syntax without additional special rules.
-- **REQ-1.2.2:** The system shall automatically link identifiers in docstrings to their corresponding documentation.
-- **REQ-1.2.3:** The system shall include source code for modules, functions, and classes when available.
-- **REQ-1.2.4:** The system shall use inheritance to infer docstrings for class members when applicable.
-- **REQ-1.2.5:** The system shall include type annotation information in the reference documentation.
+- **REQ-1.2.1:** The system shall use Material for MkDocs as the default theme for modern, responsive design.
+- **REQ-1.2.2:** The system shall support all existing MkDocs themes through configuration.
+- **REQ-1.2.3:** The system shall provide automatic dark/light mode switching.
+- **REQ-1.2.4:** The system shall include full-text search functionality across all documentation.
+- **REQ-1.2.5:** The system shall support custom CSS and JavaScript inclusion.
+- **REQ-1.2.6:** The system shall provide responsive design that works on desktop and mobile devices.
 
-### 5.2 Command line interface
+#### 5.1.3 Content Processing
 
-#### 5.2.1 Documentation server
+- **REQ-1.3.1:** The system shall process Markdown files with extended syntax support (admonition, code highlighting, etc.).
+- **REQ-1.3.2:** The system shall automatically detect and include images, media, and art directories.
+- **REQ-1.3.3:** The system shall generate intelligent page titles and navigation labels from file names.
+- **REQ-1.3.4:** The system shall create default home page content when README.md is missing.
+- **REQ-1.3.5:** The system shall support nested directory structures in documentation organization.
 
-- **REQ-2.1.1:** The system shall provide a command (`pdocs server`) to start an HTTP server for viewing generated documentation.
-- **REQ-2.1.2:** The system shall allow configuration of port and host for the HTTP server.
-- **REQ-2.1.3:** The system shall generate documentation in a temporary directory when serving locally.
-- **REQ-2.1.4:** The system shall cache generated documentation and regenerate it automatically when source code is updated.
-- **REQ-2.1.5:** The system shall support external linking between different packages when run as an HTTP server.
+### 5.2 Command Line Interface
 
-#### 5.2.2 HTML documentation generation
+#### 5.2.1 Static Website Generation
 
-- **REQ-2.2.1:** The system shall provide a command (`pdocs as_html`) to generate HTML documentation.
-- **REQ-2.2.2:** The system shall output HTML documentation to a configurable output directory.
-- **REQ-2.2.3:** The system shall provide an option to overwrite existing documentation.
-- **REQ-2.2.4:** The system shall allow configuration of external links for identifiers to external modules.
-- **REQ-2.2.5:** The system shall provide an option to exclude source code from the generated HTML.
-- **REQ-2.2.6:** The system shall support customization of link prefixes for all generated documentation links.
-- **REQ-2.2.7:** The system shall support customization through override templates.
+- **REQ-2.1.1:** The system shall provide a command (`portray as_html`) to generate static HTML documentation websites.
+- **REQ-2.1.2:** The system shall output websites to a configurable directory (default: "site").
+- **REQ-2.1.3:** The system shall provide an overwrite option to replace existing documentation.
+- **REQ-2.1.4:** The system shall support module filtering for selective API documentation generation.
+- **REQ-2.1.5:** The system shall generate production-ready static websites suitable for hosting.
 
-#### 5.2.3 Markdown documentation generation
+#### 5.2.2 Development Server
 
-- **REQ-2.3.1:** The system shall provide a command (`pdocs as_markdown`) to generate Markdown documentation.
-- **REQ-2.3.2:** The system shall output Markdown documentation to a configurable output directory.
-- **REQ-2.3.3:** The system shall provide an option to overwrite existing documentation.
+- **REQ-2.2.1:** The system shall provide a command (`portray server`) to start a local development server.
+- **REQ-2.2.2:** The system shall provide a command (`portray in_browser`) to start server and automatically open browser.
+- **REQ-2.2.3:** The system shall support configurable host and port for the development server.
+- **REQ-2.2.4:** The system shall support live reloading when source files change during development.
+- **REQ-2.2.5:** The system shall generate documentation in temporary directories for development serving.
 
-### 5.3 Programmatic API
+#### 5.2.3 Deployment
 
-#### 5.3.1 API functions
+- **REQ-2.3.1:** The system shall provide a command (`portray on_github_pages`) to deploy directly to GitHub Pages.
+- **REQ-2.3.2:** The system shall support custom commit messages for GitHub Pages deployments.
+- **REQ-2.3.3:** The system shall support force push option for deployment overrides.
+- **REQ-2.3.4:** The system shall validate documentation and version consistency before deployment.
 
-- **REQ-3.1.1:** The system shall expose all command line functionality as programmatic API functions.
-- **REQ-3.1.2:** The system shall provide type hints for all public API functions.
-- **REQ-3.1.3:** All API functions shall accept and return only built-in Python objects.
+#### 5.2.4 Configuration Management
 
-#### 5.3.2 Module and package introspection
+- **REQ-2.4.1:** The system shall provide a command (`portray project_configuration`) to display resolved configuration.
+- **REQ-2.4.2:** The system shall show all configuration sources and their precedence order.
+- **REQ-2.4.3:** The system shall validate configuration files and provide helpful error messages.
 
-- **REQ-3.2.1:** The system shall introspect installed modules and packages within the project's environment.
-- **REQ-3.2.2:** The system shall support modules that are on the Python path or specified by file paths.
-- **REQ-3.2.3:** The system shall extract public interfaces, module variables, classes, functions, and methods.
+### 5.3 Configuration System
 
-### 5.4 Compatibility and performance
+#### 5.3.1 Configuration Sources
 
-#### 5.4.1 Compatibility
+- **REQ-3.1.1:** The system shall support configuration through pyproject.toml in [tool.portray] section.
+- **REQ-3.1.2:** The system shall automatically detect project metadata from pyproject.toml [tool.poetry] section.
+- **REQ-3.1.3:** The system shall support setup.py parsing for legacy project compatibility.
+- **REQ-3.1.4:** The system shall support runtime configuration overrides through API parameters.
+- **REQ-3.1.5:** The system shall provide sensible defaults requiring no configuration for basic usage.
 
-- **REQ-4.1.1:** The system shall be compatible with Python 3.6 and newer versions.
-- **REQ-4.1.2:** The system shall work with installed modules or modules available on PYTHONPATH.
+#### 5.3.2 Git Integration
 
-#### 5.4.2 Performance and security
+- **REQ-3.2.1:** The system shall automatically detect repository URL from Git remotes.
+- **REQ-3.2.2:** The system shall support GitHub, GitLab, and Bitbucket repository types.
+- **REQ-3.2.3:** The system shall automatically generate "Edit on GitHub" links for documentation pages.
+- **REQ-3.2.4:** The system shall normalize repository URLs for consistent display and linking.
 
-- **REQ-4.2.1:** The system shall handle documentation generation efficiently for large codebases.
-- **REQ-4.2.2:** The system shall follow secure coding practices to prevent code injection when processing docstrings.
+#### 5.3.3 Advanced Configuration
 
-## 6. User stories and acceptance criteria
+- **REQ-3.3.1:** The system shall allow full MkDocs configuration through [tool.portray.mkdocs] section.
+- **REQ-3.3.2:** The system shall allow pdocs configuration through [tool.portray.pdocs] section.
+- **REQ-3.3.3:** The system shall support custom navigation structure override.
+- **REQ-3.3.4:** The system shall support additional Markdown extensions configuration.
 
-### 6.1 Documentation generation
+### 5.4 Programmatic API
 
-#### US-101: Generate documentation from docstrings
+#### 5.4.1 Core API Functions
+
+- **REQ-4.1.1:** The system shall expose all CLI functionality through programmatic Python API.
+- **REQ-4.1.2:** The system shall provide `as_html()` function for static website generation.
+- **REQ-4.1.3:** The system shall provide `server()` and `in_browser()` functions for development serving.
+- **REQ-4.1.4:** The system shall provide `on_github_pages()` function for automated deployment.
+- **REQ-4.1.5:** The system shall provide `project_configuration()` function for configuration introspection.
+
+#### 5.4.2 API Design Principles
+
+- **REQ-4.2.1:** All API functions shall accept only built-in Python types as parameters.
+- **REQ-4.2.2:** All API functions shall provide comprehensive type hints for IDE support.
+- **REQ-4.2.3:** The system shall use context managers for temporary file operations and cleanup.
+- **REQ-4.2.4:** The system shall provide consistent error handling and reporting across all API functions.
+
+### 5.5 Build Process and Integration
+
+#### 5.5.1 Build Pipeline
+
+- **REQ-5.1.1:** The system shall use temporary directories for safe documentation compilation.
+- **REQ-5.1.2:** The system shall automatically clean up temporary files after operations.
+- **REQ-5.1.3:** The system shall copy source documentation to temporary locations for processing.
+- **REQ-5.1.4:** The system shall support concurrent documentation generation through proper isolation.
+- **REQ-5.1.5:** The system shall provide progress indicators for long-running operations.
+
+#### 5.5.2 Python Environment Integration
+
+- **REQ-5.2.1:** The system shall optionally append project directory to Python path for module discovery.
+- **REQ-5.2.2:** The system shall support projects with complex module structures and namespace packages.
+- **REQ-5.2.3:** The system shall handle module imports during API documentation generation.
+- **REQ-5.2.4:** The system shall work with virtual environments and Poetry-managed projects.
+
+## 6. User Stories and Acceptance Criteria
+
+### 6.1 Zero-Configuration Documentation
+
+#### US-101: Generate documentation website without configuration
 **As a** Python developer,  
-**I want to** generate documentation directly from my code's docstrings,  
-**So that** I can maintain documentation alongside code in a single location.
+**I want to** generate a complete documentation website by running a single command,  
+**So that** I can quickly create professional documentation without setup overhead.
 
 **Acceptance criteria:**
-- The tool extracts docstrings from modules, classes, methods, and functions
-- Documentation reflects the most recent state of the code
-- All public members of a module are included in the documentation
 
-#### US-102: Control public interface documentation
-**As a** library author,  
-**I want to** explicitly control which parts of my code are documented as public,  
-**So that** internal implementation details aren't exposed in the documentation.
+- Running `portray` in a Python project directory generates a complete website
+- The website includes project README as home page
+- API documentation is automatically generated for project modules
+- No configuration files are required for basic functionality
+- Generated website uses modern, responsive design
 
-**Acceptance criteria:**
-- The `__all__` variable in a module is respected to determine what's documented
-- Members not in `__all__` are excluded from documentation by default
-- The special `__pdocs__` variable can be used to override documentation behavior
-
-#### US-103: Document variables and attributes
+#### US-102: Automatic project structure detection
 **As a** Python developer,  
-**I want to** document module variables and class attributes,  
-**So that** users understand all parts of my API.
+**I want to** have my project structure automatically detected and documented,  
+**So that** I don't need to manually configure which modules to document.
 
 **Acceptance criteria:**
-- Module-level variables are documented
-- Class attributes are documented
-- Instance variables are documented
-- Documentation includes type information when available
 
-### 6.2 Documentation formats
+- Project modules are automatically discovered from pyproject.toml or setup.py
+- Directory structure is automatically reflected in navigation
+- All .md files in project root and docs/ directory are included
+- Images and media files are automatically copied to output
 
-#### US-201: Generate HTML documentation
+### 6.2 Development Workflow
+
+#### US-201: Live preview during development
 **As a** Python developer,  
-**I want to** generate HTML documentation from my Python code,  
-**So that** users can browse my library's API in a web browser.
+**I want to** preview my documentation changes in real-time,  
+**So that** I can iterate quickly on documentation content and see results immediately.
 
 **Acceptance criteria:**
-- Documentation is generated in HTML format
-- HTML output is valid and renders correctly in modern browsers
-- Source code is included in the documentation when available
-- Output directory is configurable
 
-#### US-202: Generate Markdown documentation
-**As a** Python developer,  
-**I want to** generate Markdown documentation from my Python code,  
-**So that** I can include API documentation in GitHub or other Markdown-based platforms.
+- Development server starts with a single command
+- Browser opens automatically pointing to local documentation
+- Changes to .md files trigger automatic page refresh
+- Changes to Python code trigger API documentation regeneration
+- Server runs on configurable host and port
 
-**Acceptance criteria:**
-- Documentation is generated in Markdown format
-- Markdown is well-formatted and follows standard conventions
-- Output directory is configurable
-- Generated Markdown can be integrated with existing documentation
-
-#### US-203: Preview documentation locally
-**As a** Python developer,  
-**I want to** preview generated documentation using a local server,  
-**So that** I can check documentation before publishing it.
-
-**Acceptance criteria:**
-- A local HTTP server can be started with a simple command
-- Documentation is automatically regenerated when source files change
-- Server host and port are configurable
-- Documentation is served from a temporary directory
-
-### 6.3 API usage
-
-#### US-301: Use programmatic API
-**As a** Python developer,  
-**I want to** use pdocs as a library in my Python scripts,  
-**So that** I can automate documentation generation and integrate it with my build process.
-
-**Acceptance criteria:**
-- All command-line functionality is available through the Python API
-- API functions are well-documented with type hints
-- API returns standard Python objects that can be processed further
-- API handles errors gracefully with descriptive error messages
-
-#### US-302: Customize documentation templates
+#### US-202: Integration with existing documentation
 **As a** technical writer,  
-**I want to** customize the templates used for documentation generation,  
-**So that** the documentation matches my organization's style and branding.
+**I want to** combine my manually written guides with auto-generated API documentation,  
+**So that** users get both conceptual information and detailed API references in one place.
 
 **Acceptance criteria:**
-- Templates can be overridden by specifying a custom template directory
-- Template customization doesn't require modifying the pdocs source code
-- Documentation includes instructions for template customization
-- Changes to templates are reflected in the generated documentation
 
-#### US-303: Exclude source code from documentation
-**As a** library developer,  
-**I want to** exclude source code from the generated documentation,  
-**So that** I can reduce the size of the documentation and focus on the API.
+- Manual documentation and API references appear in unified navigation
+- Cross-links between manual docs and API documentation work correctly
+- Consistent styling and theming across all documentation types
+- Search functionality works across both manual and generated content
 
-**Acceptance criteria:**
-- An option is available to exclude source code from HTML documentation
-- When source code is excluded, documentation still includes all other API information
-- Source code exclusion is configurable via both CLI and API
+### 6.3 Deployment and Publishing
 
-### 6.4 Edge cases and special scenarios
+#### US-301: One-command GitHub Pages deployment
 
-#### US-401: Handle malformed docstrings
-**As a** Python developer,  
-**I want to** generate documentation even when some docstrings are malformed,  
-**So that** documentation generation doesn't fail completely due to minor issues.
+**As an** open source maintainer,  
+**I want to** deploy my documentation to GitHub Pages with a single command,  
+**So that** my users can access up-to-date documentation without manual publishing steps.
 
 **Acceptance criteria:**
-- The system handles malformed docstrings gracefully
-- Warnings are issued for malformed docstrings
-- Documentation generation continues despite encountering issues
-- The resulting documentation clearly indicates when docstrings are malformed
 
-#### US-402: Document imported members
-**As a** Python developer,  
-**I want to** properly document imported members in my modules,  
-**So that** users understand which parts of the API are imported from elsewhere.
+- Single command deploys documentation to GitHub Pages
+- Deployment respects existing gh-pages branch structure
+- Custom commit messages can be specified for deployments
+- Version validation prevents accidental deployment of outdated documentation
+- Force push option available for overriding existing documentation
+
+#### US-302: Static website generation for hosting
+
+**As a** developer,  
+**I want to** generate static HTML websites that can be hosted anywhere,  
+**So that** I have flexibility in choosing documentation hosting solutions.
 
 **Acceptance criteria:**
-- Imported members included in `__all__` are properly documented
-- Documentation indicates when a member is imported from another module
-- Links to the original module are provided when possible
 
-#### US-403: Generate documentation for large codebases
+- Generated websites are completely static with no server dependencies
+- All assets (CSS, JS, images) are properly included and referenced
+- Websites work correctly when served from subdirectories
+- Generated HTML is valid and follows accessibility best practices
+
+### 6.4 Customization and Theming
+
+#### US-401: Theme customization
+
+**As a** technical writer,  
+**I want to** customize the appearance of generated documentation,  
+**So that** it matches my organization's branding and style guidelines.
+
+**Acceptance criteria:**
+
+- Support for all existing MkDocs themes
+- Custom CSS and JavaScript can be included
+- Logo and favicon can be customized
+- Color schemes and typography can be modified
+- Dark/light mode toggle works correctly
+
+#### US-402: Advanced configuration for complex projects
 **As a** maintainer of a large Python project,  
-**I want to** generate documentation for my entire codebase efficiently,  
-**So that** documentation generation doesn't become a bottleneck in my workflow.
+**I want to** fine-tune documentation generation for my specific needs,  
+**So that** the generated documentation properly represents my project's structure and requirements.
 
 **Acceptance criteria:**
-- Documentation generation scales efficiently with codebase size
-- Memory usage remains reasonable for large projects
-- Generation time for large projects is acceptable
-- Progress indication is provided for long-running generation tasks
 
-## 7. Technical requirements/stack
+- Full MkDocs configuration options are available
+- Custom navigation structure can be specified
+- Specific modules can be included or excluded from API documentation
+- Additional Markdown extensions can be enabled
+- Build process can be customized through configuration
 
-### 7.1 Development environment
+### 6.5 Integration and Automation
 
-- Python 3.6+ required for development and usage
-- Poetry for dependency management and packaging
-- pytest for testing
-- mypy for static type checking
-- flake8 for linting
-- black for code formatting
-- isort for import sorting
+#### US-501: CI/CD integration
 
-### 7.2 Dependencies
+**As a** DevOps engineer,  
+**I want to** integrate documentation generation into our CI/CD pipeline,  
+**So that** documentation is automatically updated when code changes.
 
-- Markdown: For Markdown processing
-- Mako: For HTML templating
-- hug: For CLI command structure
-- docstring_parser: For parsing various docstring formats
+**Acceptance criteria:**
 
-### 7.3 Compatibility requirements
+- All functionality available through programmatic API
+- Exit codes properly indicate success/failure for CI systems
+- Progress and error information is appropriately logged
+- Generated documentation can be archived or deployed by CI systems
+- Configuration validation fails fast with clear error messages
 
-- Must work with Python 3.6 and newer versions
-- Must support multiple operating systems (Linux, macOS, Windows)
-- Must work with modules installed in the current environment or available on PYTHONPATH
-- Must support various docstring styles (Google, NumPy, reStructuredText)
+#### US-502: Multi-project documentation
 
-## 8. Design and user interface
+**As a** platform maintainer,  
+**I want to** generate consistent documentation across multiple related Python projects,  
+**So that** users have a unified experience across our ecosystem.
 
-### 8.1 Command line interface design
+**Acceptance criteria:**
 
-The command line interface should follow these design principles:
-- Consistent command structure using sub-commands
-- Clear help messages and documentation
-- Sensible defaults for all options
-- Progress indication for long-running operations
-- Descriptive error messages
+- Configuration can be shared and reused across projects
+- Theming and styling remains consistent across projects
+- Cross-project linking can be configured
+- Bulk documentation generation is efficient and reliable
 
-The primary commands will be:
+## 7. Technical Requirements
+
+### 7.1 Core Dependencies
+
+- **Python 3.12.7+**: Minimum supported Python version
+- **MkDocs Material**: Primary theme and documentation engine
+- **pdocs**: API documentation generation (custom fork)
+- **Typer**: Command-line interface framework
+- **GitPython**: Git repository introspection
+- **TOML**: Configuration file parsing
+- **livereload**: Development server with live reloading
+- **yaspin**: Progress indicators for long operations
+
+### 7.2 Development Environment
+
+- **Poetry**: Dependency management and packaging
+- **pytest**: Testing framework with high coverage requirements
+- **black**: Code formatting
+- **ruff**: Linting and code quality
+- **pre-commit**: Git hooks for code quality
+- **mypy**: Static type checking (when available)
+
+### 7.3 Compatibility Requirements
+
+- **Operating Systems**: Linux, macOS, Windows
+- **Python Versions**: 3.12.7 and newer
+- **Project Types**: Poetry projects, setup.py projects, namespace packages
+- **Git Hosting**: GitHub, GitLab, Bitbucket
+- **Deployment Targets**: GitHub Pages, Netlify, any static hosting
+
+## 8. Design and User Experience
+
+### 8.1 Command Line Interface Design
+
+The CLI should follow these principles:
+
+- **Simplicity**: Most common operations require minimal commands
+- **Consistency**: Consistent parameter naming and behavior
+- **Discoverability**: Clear help messages and examples
+- **Feedback**: Progress indicators and clear success/error messages
+
+Primary commands:
+
+```bash
+portray                          # Generate and serve documentation
+portray as_html                  # Generate static HTML
+portray server                   # Start development server
+portray in_browser              # Start server and open browser
+portray on_github_pages         # Deploy to GitHub Pages
+portray project_configuration   # Show resolved configuration
 ```
-pdocs server [modules...] [--port PORT] [--host HOST]
-pdocs as_html [modules...] [--output-dir DIR] [--overwrite]
-pdocs as_markdown [modules...] [--output-dir DIR] [--overwrite]
-```
 
-### 8.2 HTML documentation design
+### 8.2 Website Design and User Experience
 
-The HTML documentation should:
-- Be responsive and work well on various screen sizes
-- Use a clean, professional design
-- Provide easy navigation between modules, classes, and functions
-- Include a search function
-- Use syntax highlighting for code examples
-- Show inheritance relationships between classes
-- Include type annotation information
-- Provide links between related components
+Generated documentation websites should provide:
 
-### 8.3 Markdown documentation design
+- **Modern Design**: Clean, professional appearance using Material Design
+- **Responsive Layout**: Works well on desktop, tablet, and mobile devices
+- **Fast Search**: Instant search across all documentation content
+- **Clear Navigation**: Intuitive organization of manual docs and API references
+- **Code Highlighting**: Syntax highlighting for all code examples
+- **Cross-References**: Working links between related documentation sections
+- **Accessibility**: WCAG 2.1 AA compliance for screen readers and keyboard navigation
 
-The Markdown documentation should:
-- Follow standard Markdown conventions
-- Be organized hierarchically by module, then class, then method/function
-- Include proper heading levels for easy navigation
-- Use code blocks with syntax highlighting
-- Include links between related components
-- Be compatible with common Markdown processors (GitHub, MkDocs, etc.)
+### 8.3 Development Experience
 
-## 9. Release and deployment
+For developers using Portray:
 
-### 9.1 Versioning
+- **Zero Configuration**: Works immediately without setup
+- **Fast Iteration**: Live reloading enables rapid documentation development
+- **Clear Errors**: Helpful error messages with suggested solutions
+- **Flexible Configuration**: Easy customization when needed
+- **Integration Friendly**: Works well with existing development workflows
 
-- The project will follow semantic versioning (MAJOR.MINOR.PATCH)
-- Breaking changes will increment the MAJOR version
-- New features without breaking changes will increment the MINOR version
-- Bug fixes and minor improvements will increment the PATCH version
+## 9. Performance and Scalability
 
-### 9.2 Distribution
+### 9.1 Performance Requirements
 
-- The package will be distributed via PyPI
-- Installation will be possible via pip, poetry, and pipenv
-- Documentation will be available online and included in the package
-- Source code will be available on GitHub
+- **Generation Speed**: Documentation generation for typical projects (< 100 modules) in under 30 seconds
+- **Memory Usage**: Peak memory usage should not exceed 500MB for large projects
+- **Development Server**: Live reload response time under 2 seconds for typical changes
+- **Static Assets**: Optimized CSS/JS delivery with proper caching headers
 
-### 9.3 Testing and quality assurance
+### 9.2 Scalability Considerations
 
-- All features must have corresponding unit tests
-- Test coverage should be maintained at 80% or higher
-- Integration tests must verify end-to-end functionality
-- Performance benchmarks must be established for documentation generation
+- **Large Projects**: Support for projects with 1000+ modules and documentation pages
+- **Concurrent Usage**: Multiple developers can run development servers simultaneously
+- **Build Parallelization**: Documentation generation can utilize multiple CPU cores
+- **Incremental Builds**: Only regenerate changed portions during development
 
-## 10. Future considerations
+## 10. Security and Reliability
 
-### 10.1 Potential enhancements
+### 10.1 Security Requirements
 
-- Support for additional output formats (PDF, reStructuredText)
-- Integration with continuous integration systems
-- Plugin system for custom documentation processors
-- Support for documenting C extensions
-- Interactive documentation with runnable code examples
+- **Code Execution**: Safe handling of Python code analysis without arbitrary code execution
+- **File System**: Proper sandboxing of temporary file operations
+- **Git Operations**: Safe handling of Git repository operations
+- **Dependency Management**: Regular security updates for all dependencies
 
-### 10.2 Integration opportunities
+### 10.2 Reliability Requirements
 
-- Integration with GitHub Pages for automatic documentation publishing
-- Integration with Read the Docs for hosted documentation
-- Integration with code editors for inline documentation preview
-- Integration with build systems like Tox, Nox, or Make
+- **Error Recovery**: Graceful handling of malformed documentation or code
+- **Resource Cleanup**: Proper cleanup of temporary files and resources
+- **Network Resilience**: Robust handling of network issues during Git operations
+- **Cross-Platform**: Consistent behavior across different operating systems
 
-## 11. Appendices
+## 11. Testing and Quality Assurance
 
-### 11.1 Glossary
+### 11.1 Testing Requirements
 
-- **Docstring**: A string literal that occurs as the first statement in a module, function, class, or method definition in Python.
-- **AST**: Abstract Syntax Tree, a tree representation of the abstract syntactic structure of source code.
-- **Markdown**: A lightweight markup language with plain-text formatting syntax.
-- **HTML**: HyperText Markup Language, the standard markup language for documents designed to be displayed in a web browser.
-- **API**: Application Programming Interface, a set of functions and procedures allowing the creation of applications that access the features or data of an operating system, application, or other service.
-- **CLI**: Command Line Interface, a means of interacting with a computer program where the user issues commands to the program in the form of successive lines of text.
+- **Unit Tests**: 80%+ code coverage for all core functionality
+- **Integration Tests**: End-to-end testing of complete documentation generation
+- **Performance Tests**: Benchmarking for generation speed and memory usage
+- **Cross-Platform Tests**: Validation on Linux, macOS, and Windows
+- **Theme Tests**: Verification that all supported themes work correctly
 
-### 11.2 References
+### 11.2 Quality Metrics
 
-- Python documentation: https://docs.python.org/
-- PEP 257 (Docstring Conventions): https://www.python.org/dev/peps/pep-0257/
-- PEP 484 (Type Hints): https://www.python.org/dev/peps/pep-0484/
-- Markdown Specification: https://daringfireball.net/projects/markdown/syntax
+- **Code Quality**: Lint-free code with consistent formatting
+- **Documentation**: All public APIs documented with type hints
+- **Performance**: Regression testing for generation speed
+- **User Experience**: Regular usability testing with real projects
+
+## 12. Release and Deployment
+
+### 12.1 Versioning Strategy
+
+- **Semantic Versioning**: MAJOR.MINOR.PATCH versioning scheme
+- **Backward Compatibility**: Maintain CLI and API compatibility within major versions
+- **Deprecation Policy**: 6-month notice for breaking changes
+- **Release Cadence**: Regular minor releases with new features and improvements
+
+### 12.2 Distribution Channels
+
+- **PyPI**: Primary distribution channel for pip installation
+- **GitHub**: Source code and release artifacts
+- **Documentation**: Comprehensive documentation hosted using Portray itself
+- **Docker**: Optional containerized distribution for CI/CD environments
+
+## 13. Future Enhancements
+
+### 13.1 Planned Features
+
+- **Multi-Language Support**: Support for documenting projects with mixed languages
+- **Plugin System**: Extensible architecture for custom documentation processors
+- **Enhanced Themes**: Additional built-in themes and theme customization tools
+- **API Documentation**: Enhanced API documentation with interactive examples
+- **Performance Optimization**: Incremental builds and caching improvements
+
+### 13.2 Integration Opportunities
+
+- **IDE Integration**: Plugins for popular Python IDEs
+- **Documentation Hosting**: Partnerships with documentation hosting services
+- **CI/CD Tools**: Enhanced integration with popular CI/CD platforms
+- **Package Managers**: Integration with conda and other Python package managers
+
+## 14. Success Criteria and Metrics
+
+### 14.1 Adoption Metrics
+
+- **Downloads**: Monthly PyPI downloads as indicator of adoption
+- **GitHub Stars**: Community interest and engagement
+- **Issue Resolution**: Average time to resolve user-reported issues
+- **Documentation Quality**: User feedback on generated documentation quality
+
+### 14.2 Technical Metrics
+
+- **Performance**: Documentation generation speed benchmarks
+- **Reliability**: Error rates and successful generation percentages
+- **Compatibility**: Percentage of Python projects that work without configuration
+- **Test Coverage**: Maintaining high test coverage across all components
+
+## 15. Conclusion
+
+Portray represents a significant advancement in Python documentation tooling by combining the best aspects of manual documentation writing with automatic API documentation
+generation. By focusing on zero-configuration operation while maintaining flexibility for advanced users, Portray aims to make comprehensive documentation accessible to all Python
+developers.
+
+The success of Portray will be measured not just by adoption metrics, but by its ability to improve the overall quality and accessibility of Python project documentation across the
+ecosystem. Through careful attention to user experience, performance, and reliability, Portray will establish itself as the go-to solution for Python documentation needs.

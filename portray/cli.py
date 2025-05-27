@@ -9,9 +9,11 @@ it should maintain 1:1 compatibility with the programmatic API definition in the
 - `portray server`: Starts a local development server (by default at localhost:8000)
 - `portray project_configuration`: Returns back the project configuration as determined by` portray`
 """
+
 from pprint import pprint
 
 import hug
+
 from portray import api, logo
 
 cli = hug.cli(api=hug.API(__name__, doc=logo.ascii_art))

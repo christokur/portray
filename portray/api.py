@@ -1,15 +1,17 @@
 """This module defines the programmatic API that can be used to interact with `portray`
-   to generate and view documentation.
+to generate and view documentation.
 
-   If you want to extend `portray` or use it directly from within Python - this is the place
-   to start.
+If you want to extend `portray` or use it directly from within Python - this is the place
+to start.
 """
+
 import os
 import webbrowser
 from typing import Dict, Union
 
 import mkdocs.commands.gh_deploy
 from livereload import Server
+
 from portray import config, logo, render
 
 
@@ -182,8 +184,6 @@ def on_github_pages(
         project_config["mkdocs"]["site_dir"] = site_dir
         conf = render._mkdocs_config(project_config["mkdocs"])
         conf.config_file_path = directory
-        mkdocs.commands.gh_deploy.gh_deploy(
-            conf, message=message, force=force, ignore_version=ignore_version
-        )
+        mkdocs.commands.gh_deploy.gh_deploy(conf, message=message, force=force, ignore_version=ignore_version)
         print(logo.ascii_art)
         print("Documentation successfully generated and pushed!")

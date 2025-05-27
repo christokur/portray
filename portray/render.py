@@ -1,8 +1,8 @@
 """Defines how to render the current project and project_config using the
 included documentation generation utilities.
 """
-import logging
 
+import logging
 import os
 import shutil
 import sys
@@ -17,8 +17,9 @@ from mkdocs.commands.build import build as mkdocs_build
 from mkdocs.config.defaults import get_schema as mkdocs_schema
 from mkdocs.utils import is_markdown_file
 from pdocs import as_markdown as pdocs_as_markdown
-from portray.exceptions import DocumentationAlreadyExists
 from yaspin import yaspin
+
+from portray.exceptions import DocumentationAlreadyExists
 
 NO_HOME_PAGE = """
 # Nothing here
@@ -77,6 +78,7 @@ def mkdocs(config: dict):
 
     stream = logging.StreamHandler()
     from mkdocs.__main__ import ColorFormatter
+
     stream.setFormatter(ColorFormatter())
     stream.setLevel(logging.WARNING)
     stream.name = 'MkDocsStreamHandler'
@@ -96,9 +98,7 @@ def documentation_in_temp_folder(config: dict) -> Iterator[Tuple[str, str]]:
         os.mkdir(input_dir)
         with tempfile.TemporaryDirectory() as temp_output_dir:
 
-            with yaspin(
-                text="Copying source documentation to temporary compilation directory"
-            ) as spinner:
+            with yaspin(text="Copying source documentation to temporary compilation directory") as spinner:
                 for root_file in os.listdir(config["directory"]):
                     root_file_absolute = os.path.join(config["directory"], root_file)
                     if os.path.isfile(root_file_absolute) and is_markdown_file(root_file_absolute):
@@ -107,9 +107,7 @@ def documentation_in_temp_folder(config: dict) -> Iterator[Tuple[str, str]]:
                 for source_directory in [config["docs_dir"]] + config["extra_dirs"]:
                     directory_absolute = os.path.join(config["directory"], source_directory)
                     if os.path.isdir(directory_absolute):
-                        shutil.copytree(
-                            directory_absolute, os.path.join(input_dir, source_directory)
-                        )
+                        shutil.copytree(directory_absolute, os.path.join(input_dir, source_directory))
 
                 spinner.ok("Done")
 
@@ -132,9 +130,7 @@ def documentation_in_temp_folder(config: dict) -> Iterator[Tuple[str, str]]:
 
                 nav.extend(_doc(doc, input_dir, config) for doc in root_docs)
 
-                nav.extend(
-                    _nested_docs(os.path.join(input_dir, config["docs_dir"]), input_dir, config)
-                )
+                nav.extend(_nested_docs(os.path.join(input_dir, config["docs_dir"]), input_dir, config))
             else:
                 nav = config["mkdocs"]["nav"]
                 if nav:
@@ -153,9 +149,7 @@ def documentation_in_temp_folder(config: dict) -> Iterator[Tuple[str, str]]:
                             and index_page != "index.md"
                             and not os.path.exists(destination_index_page)
                         ):
-                            shutil.copyfile(
-                                os.path.join(input_dir, index_page), destination_index_page
-                            )
+                            shutil.copyfile(os.path.join(input_dir, index_page), destination_index_page)
 
             if config["include_reference_documentation"] and (
                 config["include_reference_documentation"] not in ("false", "False")
@@ -168,6 +162,7 @@ def documentation_in_temp_folder(config: dict) -> Iterator[Tuple[str, str]]:
                         pdocs(config["pdocs"])
                     except Exception as exc:
                         import traceback
+
                         tb = traceback.format_tb(exc.__traceback__)
                         print("".join(tb), file=sys.stderr)
                         raise exc
@@ -184,9 +179,7 @@ def documentation_in_temp_folder(config: dict) -> Iterator[Tuple[str, str]]:
                 del config["mkdocs"]["docs_dir"]
             if config["mkdocs"]["site_dir"].startswith(temp_output_dir):
                 del config["mkdocs"]["site_dir"]
-            if config["pdocs"].get("output_dir") and config["pdocs"]["output_dir"].startswith(
-                input_dir
-            ):
+            if config["pdocs"].get("output_dir") and config["pdocs"]["output_dir"].startswith(input_dir):
                 del config["pdocs"]["output_dir"]
             if config["include_reference_documentation"]:
                 nav.pop()
@@ -201,9 +194,7 @@ def _mkdocs_config(config: dict) -> mkdocs_config.Config:
     errors, warnings = config_instance.validate()
     if errors:
         print(errors)
-        raise _mkdocs_exceptions.ConfigurationError(
-            f"Aborted with {len(errors)} Configuration Errors!"
-        )
+        raise _mkdocs_exceptions.ConfigurationError(f"Aborted with {len(errors)} Configuration Errors!")
     elif config.get("strict", False) and warnings:  # pragma: no cover
         print(warnings)
         raise _mkdocs_exceptions.ConfigurationError(
@@ -215,19 +206,12 @@ def _mkdocs_config(config: dict) -> mkdocs_config.Config:
 
 
 def _nested_docs(directory: str, root_directory: str, config: dict) -> list:
-    nav = [
-        _doc(doc, root_directory, config) for doc in sorted(glob(os.path.join(directory, "*.md")))
-    ]
+    nav = [_doc(doc, root_directory, config) for doc in sorted(glob(os.path.join(directory, "*.md")))]
 
     nested_dirs = sorted(glob(os.path.join(directory, "*/")))
     for nested_dir in nested_dirs:
-        if (
-            len(glob(os.path.join(nested_dir, "*.md")) + glob(os.path.join(nested_dir, "**/*.md")))
-            > 0
-        ):
-            dir_nav = {
-                _label(nested_dir[:-1], config): _nested_docs(nested_dir, root_directory, config)
-            }
+        if len(glob(os.path.join(nested_dir, "*.md")) + glob(os.path.join(nested_dir, "**/*.md"))) > 0:
+            dir_nav = {_label(nested_dir[:-1], config): _nested_docs(nested_dir, root_directory, config)}
             nav.append(dir_nav)  # type: ignore
 
     return nav

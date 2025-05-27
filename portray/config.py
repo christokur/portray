@@ -1,4 +1,5 @@
 """Defines the configuration defaults and load functions used by `portray`"""
+
 import _ast
 import ast
 import os
@@ -10,8 +11,9 @@ from typing import Any, Dict, Optional
 import mkdocs.config as _mkdocs_config  # noqa
 import mkdocs.exceptions as _mkdocs_exceptions  # noqa
 from git import Repo
-from portray.exceptions import NoProjectFound
 from toml import load as toml_load
+
+from portray.exceptions import NoProjectFound
 
 PORTRAY_DEFAULTS = {
     "docs_dir": "docs",
@@ -67,14 +69,11 @@ def project(directory: str, config_file: str, **overrides) -> dict:
     project_config.setdefault("pdocs", {}).setdefault("modules", project_config["modules"])
 
     mkdocs_config = project_config.get("mkdocs", {})
-    mkdocs_config.setdefault(
-        "extra_markdown_extensions", project_config.get("extra_markdown_extensions", [])
-    )
+    mkdocs_config.setdefault("extra_markdown_extensions", project_config.get("extra_markdown_extensions", []))
     project_config["mkdocs"] = mkdocs(directory, **mkdocs_config)
     if "pdoc3" in project_config:
         warnings.warn(
-            "pdoc3 config usage is deprecated in favor of pdocs. "
-            "pdoc3 section will be ignored. ",
+            "pdoc3 config usage is deprecated in favor of pdocs. " "pdoc3 section will be ignored. ",
             DeprecationWarning,
         )
     project_config["pdocs"] = pdocs(directory, **project_config.get("pdocs", {}))
@@ -128,11 +127,7 @@ def toml(location: str) -> dict:
         if "modules" not in config:
             if "poetry" in tools and "name" in tools["poetry"]:
                 config["modules"] = [tools["poetry"]["name"]]
-            elif (
-                "flit" in tools
-                and "metadata" in tools["flit"]
-                and "module" in tools["flit"]["metadata"]
-            ):
+            elif "flit" in tools and "metadata" in tools["flit"] and "module" in tools["flit"]["metadata"]:
                 config["modules"] = [tools["flit"]["metadata"]["module"]]
 
         return config
