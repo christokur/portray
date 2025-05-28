@@ -1,5 +1,5 @@
 {
-  "template": "git@github.com:SandsB2B/cookiecutter-b2b-project.git",
+  "template": "git@github.com:christokur/cookiecutter-b2b-project.git",
   "commit": "c181afe77e40335a38a8f67c80393baa6f5fe1bf",
   "checkout": "v0.26.84",
   "context": {
@@ -80,7 +80,7 @@
       "docs_hosted_zone_id": "Z0827901K2W3PZV3XWL1",
       "op_vault": "b2b-cloud-infra",
       "op_item": "\"github-terraform-pipelines GithubActions User credentials\"",
-      "gh_org": "SandsB2B",
+      "gh_org": "christokur",
       "aws_profile_tools": "cloud-services-prod",
       "gh_email": "christo.delange@sands.com",
       "gh_username_oss_repos": "christokur",
@@ -208,7 +208,7 @@
       },
       "pytest_ini_options": {},
       "tools": {},
-      "_template": "git@github.com:SandsB2B/cookiecutter-b2b-project.git",
+      "_template": "git@github.com:christokur/cookiecutter-b2b-project.git",
       "_commit": "c181afe77e40335a38a8f67c80393baa6f5fe1bf"
     }
   },

@@ -82,6 +82,8 @@ jobs:
           #poetry run pytest tests/ -s --cov=portray/ --cov-report=term-missing ${@-}
           bash ./scripts/test.sh
           poetry run coverage xml || true
+          
+          poetry run poe test-cov
 
 #      - name: Report Coverage
 #        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.12'
