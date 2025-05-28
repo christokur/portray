@@ -1,190 +1,127 @@
-
+# Portray: Replacing Hug with Typer Implementation Plan
 
 ## Implementation Details
 
 #### Detailed Implementation Steps
 
-1. **Analyze Current Server Behavior**:
-    - Document exact behavior of hug-based server
-    - Identify all configuration options and their effects
-    - Note any special request handling or routing
+1. **Analyze Current CLI Structure**:
+   - Document exact behavior of hug-based CLI commands
+   - Identify all parameters and their defaults
+   - Note any special formatting or output handling
 
-2. **Implement http.server Solution**:
-    - Use `http.server.HTTPServer` with custom request handler
-    - Maintain same parameter interface as original function
-    - Preserve startup behavior (ASCII art, browser opening)
+2. **Implement Typer Solution**:
+   - Create a Typer app to replace hug's CLI interface
+   - Maintain identical parameter interfaces for all commands
+   - Preserve ASCII art logo and output formatting
 
 3. **Integration**:
-    - Replace hug imports and decorators in `pdocs/api.py`
-    - Test server functionality thoroughly
-    - Ensure backward compatibility
+   - Replace hug imports and decorators in `portray/cli.py`
+   - Test CLI functionality thoroughly
+   - Ensure backward compatibility
 
 The migration will be performed in phases to ensure a controlled transition and allow for thorough testing at each stage.
 
-### Phase 1: Replace CLI Implementation (pdocs/cli.py)
+### Phase 1: Replace CLI Implementation (portray/cli.py)
 
 The primary goal of this phase is to replace the `hug`-based CLI with a `typer`-based one, ensuring complete backward compatibility in terms of commands, arguments, and help output.
 
-1.  **Setup Typer Application**:
-*   In `pdocs/cli.py`, initialize a `typer.Typer()` app instance (e.g., `app = typer.Typer()`).
-*   Configure the main app's help text using `typer.Typer(help="...")` or by adding a callback. This should incorporate `pdocs.logo.ascii_art` (if available as a string) and version information. A `--version` option will be added using `typer`'s built-in mechanisms.
-2.  **Implement `as_html` command**:
-*   Define a Python function for the `as_html` command within `pdocs/cli.py`.
-*   Decorate this function with `@app.command(help="Produces HTML formatted output...")`.
-*   Replicate all parameters (arguments and options) from the original `pdocs.api.as_html` function signature. This includes names, types, default values, and help texts. `typer.Argument(...)` and `typer.Option(...)` will be used. Help texts for parameters will be sourced from the original function's docstrings or observed `hug` behavior.
-*   The command function will import and call `pdocs.api.as_html` with the arguments received from `typer`.
-3.  **Implement `as_markdown` command**:
-*   Similar to the `as_html` command, create a `typer` command function that calls `pdocs.api.as_markdown`.
-*   Ensure its signature and help text match the `hug` version (`@app.command(help="Produces Markdown formatted output...")`).
-4.  **Implement `server` command**:
-*   Similar to the `as_html` command, create a `typer` command function that calls `pdocs.api.server`.
-*   Ensure its signature and help text match the `hug` version (`@app.command(help="Runs a development webserver...")`).
-*   **Note**: In this phase, this `typer` command will still invoke the *existing* `hug`-based `pdocs.api.server` function. The internal rewrite of `pdocs.api.server` is deferred to Phase 2.
-5.  **Update Entry Point**:
-*   Ensure the `pyproject.toml` script entry point `pdocs = "pdocs.cli:app"` correctly points to the `typer.Typer()` instance in `pdocs/cli.py`.
-6.  **Update CLI Tests**:
-*   Adapt `tests/test_cli.py` to use `typer.testing.CliRunner`.
-*   Update tests to verify:
-    *   Correct invocation of subcommands.
-    *   Accurate passing of arguments and options to the underlying API functions.
-    *   Help output for the main command and each subcommand (`pdocs --help`, `pdocs as_html --help`, etc.) matches the `hug` version's structure and content.
-    *   Version output (`pdocs --version`).
-    *   Error handling for missing/invalid arguments matches or improves upon `hug`'s behavior.
+1. **Setup Typer Application**:
+   * In `portray/cli.py`, initialize a `typer.Typer()` app instance (e.g., `app = typer.Typer()`).
+   * Configure the main app's help text using `typer.Typer(help="...")` to incorporate `portray.logo.ascii_art`.
+   * Add a `--version` option using `typer`'s built-in mechanisms.
 
-### Phase 2: Update Server Function in api.py
+2. **Implement `as_html` command**:
+   * Define a Python function for the `as_html` command within `portray/cli.py`.
+   * Decorate this function with `@app.command()`.
+   * Replicate all parameters (arguments and options) from the original `portray.api.as_html` function signature:
+     * `directory`: The root folder of your project.
+     * `config_file`: The TOML formatted config file you wish to use.
+     * `output_dir`: The directory to place the generated HTML into.
+     * `overwrite`: If set to True any existing documentation output will be removed before generating new documentation.
+     * `modules`: One or more modules to render reference documentation for
+   * The command function will call `portray.api.as_html` with the arguments received from `typer`.
 
-This phase focuses on removing the `hug` dependency from the `pdocs.api.server` function by reimplementing its web server functionality using Python's standard `http.server` module.
+3. **Implement `project_configuration` command**:
+   * Create a `typer` command function that calls `portray.api.project_configuration`.
+   * Ensure its signature matches the original function, with parameters:
+     * `directory`: The root folder of your project.
+     * `config_file`: The TOML formatted config file you wish to use.
+     * `modules`: One or more modules to include in the configuration for reference rendering
+     * `output_dir`: The directory to place the generated HTML into.
+   * Use `pprint` to display the configuration output, similar to the current implementation.
 
-1.  **Analyze Current `pdocs.api.server` Behavior**:
-*   Based on answers to clarifying questions, document the exact behavior of the `hug`-based server:
-    *   Default and configurable host/port.
-    *   Mechanism for specifying the directory to serve (e.g., from CLI arguments passed to `api.server`).
-    *   Content serving logic (e.g., `index.html` resolution, MIME types).
-    *   Any live-reload or dynamic regeneration features (if any).
-    *   Specific routes or custom request handling.
-2.  **Implement `http.server`-based Solution**:
-*   In `pdocs/api.py` (or a new helper module like `pdocs/webserver.py` if the logic is substantial), create a new server implementation.
-*   Use `http.server.HTTPServer` and a custom request handler class derived from `http.server.SimpleHTTPRequestHandler` or `http.server.BaseHTTPRequestHandler`.
-*   The custom handler will be responsible for serving files from the specified documentation output directory.
-*   Ensure the new server can be configured with host, port, and the directory to serve, based on parameters passed to the `pdocs.api.server` function.
-3.  **Integrate New Server into `pdocs.api.server`**:
-*   Modify the `pdocs.api.server` function in `pdocs/api.py`.
-*   Remove all `hug`-related code for server setup and request handling.
-*   Instantiate and run the new `http.server`-based implementation, passing necessary configurations (host, port, directory) received from its function arguments (which are, in turn, passed by the `typer` CLI command).
+4. **Implement `server` command**:
+   * Create a `typer` command function that calls `portray.api.server`.
+   * Ensure its signature matches the original function, with parameters:
+     * `directory`: The root folder of your project.
+     * `config_file`: The TOML formatted config file you wish to use.
+     * `open_browser`: If true a browser will be opened pointing at the documentation server
+     * `port`: The port to expose your documentation on
+     * `host`: The host to expose your documentation on
+     * `modules`: One or more modules to render reference documentation for
+     * `reload`: If true the server will live load any changes
+
+5. **Implement `in_browser` command**:
+   * Create a `typer` command function that calls `portray.api.in_browser`.
+   * Maintain the same parameter interface as the original function.
+
+6. **Implement `on_github_pages` command**:
+   * Create a `typer` command function that calls `portray.api.on_github_pages`.
+   * Maintain the same parameter interface as the original function, with parameters:
+     * `directory`: The root folder of your project.
+     * `config_file`: The TOML formatted config file you wish to use.
+     * `message`: The commit message to use when uploading your documentation.
+     * `force`: Force the push to the repository.
+     * `ignore_version`: Ignore check that build is not being deployed with an old version.
+     * `modules`: One or more modules to render reference documentation for
+
+7. **Update Entry Point**:
+   * Ensure the entry point in `pyproject.toml` correctly points to the `typer.Typer()` instance in `portray/cli.py`.
+
+8. **Update CLI Tests**:
+   * If CLI tests exist, adapt them to use `typer.testing.CliRunner`.
+   * Update tests to verify:
+     * Correct invocation of commands
+     * Accurate passing of arguments and options
+     * Help output for the main command and each subcommand matches the original
+
+### Phase 2: Review Server Implementation
+
+Unlike pdocs, portray's server functionality doesn't directly use hug but relies on livereload's Server class. This simplifies our migration process.
+
+1. **Review Current Server Implementation**:
+   * The `server()` function in `portray/api.py` uses livereload's Server class
+   * No direct changes to the server implementation are needed as part of the hug removal
+
+2. **Integration Testing**:
+   * Verify that the livereload server works properly when called from the new typer CLI
+   * Test with different parameters (host, port, open_browser, etc.)
+   * Ensure the livereload functionality still works with the CLI changes
 
 ### Phase 3: Testing, Verification, and Documentation
 
-1.  **Run Automated Tests**:
-*   Execute the complete test suite (`pytest` or equivalent).
-*   Fix any issues that arise in `tests/test_cli.py` or any tests related to the server functionality.
-*   If server-specific tests exist, adapt them to test the new `http.server` implementation (e.g., by making HTTP requests to `localhost` and verifying responses). If they don't exist, consider adding basic tests for the server.
-2.  **Manual Testing**:
-*   **CLI**:
-    *   Test `pdocs --help` for overall structure, logo, and command list.
-    *   Test `pdocs --version`.
-    *   For each command (`as_html`, `as_markdown`, `server`):
-    *   Test `<command> --help` for correct parameter descriptions.
-    *   Test with valid arguments to ensure correct operation.
-    *   Test with missing required arguments.
-    *   Test with invalid argument values.
-    *   Verify output (generated files for `as_html`/`as_markdown`, server startup messages for `server`).
-*   **Server**:
-    *   Run `pdocs server [options]` (e.g., specifying a custom port or output directory if supported).
-    *   Access the server from a web browser.
-    *   Verify that documentation pages are served correctly.
-    *   Check for 404 errors for non-existent pages.
-    *   Confirm any specific behaviors (like serving `index.html` for a directory request) are maintained.
-3.  **Update Documentation**:
-*   Review and update `README.md` if any user-facing aspects of the CLI have changed (though the goal is 100% backward compatibility).
-*   Ensure all help texts within the CLI itself (main help, command help, argument help) are accurate, clear, and match the previous `hug` output as closely as possible.
-*   Update any internal developer documentation regarding the CLI or server implementation.
+1. **Run Automated Tests**:
+   * Execute the complete test suite
+   * Fix any issues that arise in CLI-related tests
+   * Ensure server functionality works properly with the new CLI
 
-#### Automated Testing
-1. **Update Test Suite**:
-    - Convert all hug-based tests to typer equivalents
-    - Add new tests for edge cases
-    - Ensure test coverage is maintained or improved
+2. **Manual Testing**:
+   * **CLI**:
+     * Test `portray --help` for overall structure, logo, and command list
+     * Test `portray --version`
+     * For each command (`as_html`, `in_browser`, `server`, etc.):
+       * Test `<command> --help` for correct parameter descriptions
+       * Test with valid arguments to ensure correct operation
+       * Test with missing required arguments
+       * Test with invalid argument values
+   * **Server**:
+     * Run `portray server [options]`
+     * Run `portray in_browser [options]`
+     * Access the server from a web browser
+     * Verify that documentation pages are served correctly
+     * Test the live reload functionality if enabled
 
-2. **Integration Testing**:
-    - Test complete CLI workflows
-    - Verify server functionality with real documentation generation
-    - Test error handling scenarios
-
-#### Manual Testing Checklist
-1. **CLI Commands**:
-    - `pdocs --help` - verify structure, logo, and command list
-    - `pdocs --version` - verify version display
-    - `pdocs as-html --help` - verify parameter descriptions
-    - `pdocs as-markdown --help` - verify parameter descriptions
-    - `pdocs server --help` - verify parameter descriptions
-    - Test each command with valid arguments
-    - Test error handling for invalid arguments
-
-2. **Server Functionality**:
-    - Start server with default settings
-    - Start server with custom host/port
-    - Verify documentation pages are served correctly
-    - Test 404 handling for non-existent pages
-    - Verify browser auto-opening (if enabled)
-
-#### Cleanup and Documentation
-1. **Remove hug Dependency**:
-    - Update `pyproject.toml` to remove hug
-    - Verify no remaining hug imports in codebase
-    - Update lock files
-
-2. **Update Documentation**:
-    - Review and update README.md if needed
-    - Ensure help texts are accurate and complete
-    - Update any developer documentation
-
-## Risk Assessment and Mitigation
-
-### Low Risk
-- **CLI parameter compatibility**: Typer auto-detects from function signatures
-- **Basic command registration**: Straightforward typer functionality
-- **Test updates**: Well-documented typer testing approach
-
-### Medium Risk
-- **ASCII art integration**: May require callback function approach
-- **Server implementation**: http.server has different capabilities than hug
-- **Error handling consistency**: Different error patterns between frameworks
-
-**Mitigation**: Extensive testing and comparison with original behavior
-
-### High Risk
-- **Complex server features**: Potential for missing hug-specific functionality
-- **Performance differences**: http.server may perform differently
-
-**Mitigation**: Thorough analysis of current server behavior before implementation
-
-## Success Criteria
-
-1. ✅ All existing CLI commands work identically
-2. ✅ Server functionality maintains same behavior
-3. ✅ All tests pass with updated testing framework
-4. ✅ No new dependencies added beyond typer
-5. ✅ Performance equivalent or better
-6. ✅ ASCII art displays correctly in help output
-7. ✅ Help text functionality preserved
-8. ✅ Error handling matches or improves original behavior
-
-## Rollback Plan
-
-1. **Maintain hug dependency** during development and testing
-2. **Create feature branch** for all migration work
-3. **Extensive testing** before removing hug from dependencies
-4. **Document any differences** found during testing for future reference
-
-## Implementation Notes
-
-- **Function Signatures**: Keep API function signatures unchanged to ensure parameter compatibility
-- **Testing Priority**: Focus on CLI compatibility first, then server functionality
-- **Incremental Approach**: Complete Phase 1 fully before starting Phase 2
-- **Performance Monitoring**: Compare performance before/after migration
-- **Error Handling**: Document any differences in error behavior between hug and typer
-
-## Example CLI Usage (Target Output)
-
-The new typer implementation should produce output identical to the original:
-
+3. **Update Documentation**:
+   * Review and update `README.md` if any user-facing aspects of the CLI have changed
+   * Ensure all help texts within the CLI itself are accurate and clear
+   * Update any internal developer documentation regarding the CLI implementation

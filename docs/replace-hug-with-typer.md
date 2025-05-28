@@ -1,4 +1,4 @@
-We are working on modernizing this pdocs project.
+We are working on modernizing this portray project.
 
 We are working on removing the dependency on the `hug` package and using the `typer` package instead to implement the CLI.
 
@@ -6,16 +6,18 @@ We are working on removing the dependency on the `hug` package and using the `ty
 
 The current implementation uses `hug` in two main places:
 
-1. **CLI Implementation**: In `pdocs/cli.py`, hug is used to create a command-line interface that exposes the following functions from `pdocs.api`:
+1. **CLI Implementation**: In `portray/cli.py`, hug is used to create a command-line interface that exposes the following functions from `portray.api`:
    - `as_html`
-   - `as_markdown`
+   - `in_browser`
    - `server`
+   - `project_configuration`
+   - `on_github_pages`
 
-2. **Server Function**: In `pdocs/api.py`, the `server()` function uses hug to create a web server for documentation browsing.
+2. **Server Function**: In `portray/api.py`, the `server()` function does not directly use hug but relies on livereload's Server class for the web server functionality.
 
 ## Migration Plan
 
-### Phase 1: Replace CLI Implementation (pdocs/cli.py)
+### Phase 1: Replace CLI Implementation (portray/cli.py)
 
 1. **Create New CLI Implementation with Typer**:
    - Replace the current hug-based CLI with a new Typer-based implementation
@@ -23,16 +25,17 @@ The current implementation uses `hug` in two main places:
    - Set up the same command structure to maintain backward compatibility
 
 2. **Update Entry Point**:
-   - Modify `pyproject.toml` to use the new Typer app (already points to `pdocs.cli:app`)
+   - Modify `pyproject.toml` to use the new Typer app if needed
 
 3. **Update Tests**:
-   - Adapt `tests/test_cli.py` to use Typer's testing utilities instead of hug's
+   - Adapt any CLI tests to use Typer's testing utilities instead of hug's
 
-### Phase 2: Update Server Function in api.py
+### Phase 2: Review Server Function in api.py
 
-1. **Replace hug Server with Alternative**:
-   - Remove hug usage in the `server()` function
-   - Implement equivalent functionality using a simple HTTP server or a lightweight framework like FastAPI
+1. **Review Server Implementation**:
+   - Unlike pdocs, portray's server function uses livereload rather than hug
+   - Ensure the Server implementation works with the updated CLI
+   - No major changes needed for the server implementation itself
 
 ### Phase 3: Testing and Verification
 
@@ -53,100 +56,129 @@ The current CLI is very simple and just registers API functions with hug. Here's
 ```python
 # Current implementation (hug-based)
 import hug
-from pdocs import api, logo
+from portray import api, logo
 
 cli = hug.cli(api=hug.API(__name__, doc=logo.ascii_art))
 cli(api.as_html)
-cli(api.as_markdown)
+cli.output(pprint)(api.project_configuration)
 cli(api.server)
+cli(api.in_browser)
+cli(api.on_github_pages)
 ```
 
+The new implementation will use Typer:
 
+```python
+# New implementation (typer-based)
+import typer
+from pprint import pprint
+from typing import Optional, List
 
-I set up an older version of the project that still used hug and python 3.8 here: /Users/christo/workspace/LVS/ws/SandsB2B/tools/pdocs-1.2.1
+from portray import api, logo
 
-You can experiment with the CLI of the 1.2.x version by doing this in the terminal:
-```
-cd /Users/christo/workspace/LVS/ws/SandsB2B/tools/pdocs-1.2.1 && source $RC_DIR/python.rc && pdocs <args>
+app = typer.Typer(help=logo.ascii_art)
+
+@app.command()
+def as_html(
+    directory: str = typer.Argument("", help="The root folder of your project."),
+    config_file: str = typer.Option("pyproject.toml", help="The TOML formatted config file you wish to use."),
+    output_dir: str = typer.Option("site", help="The directory to place the generated HTML into."),
+    overwrite: bool = typer.Option(False, help="If set to True any existing documentation output will be removed before generating new documentation."),
+    modules: Optional[List[str]] = typer.Option(None, help="One or more modules to render reference documentation for"),
+) -> None:
+    """Produces HTML documentation for a Python project placing it into output_dir."""
+    api.as_html(directory=directory, config_file=config_file, output_dir=output_dir, overwrite=overwrite, modules=modules)
+
+@app.command()
+def project_configuration(
+    directory: str = typer.Argument("", help="The root folder of your project."),
+    config_file: str = typer.Option("pyproject.toml", help="The TOML formatted config file you wish to use."),
+    modules: Optional[List[str]] = typer.Option(None, help="One or more modules to include in the configuration for reference rendering"),
+    output_dir: Optional[str] = typer.Option(None, help="The directory to place the generated HTML into."),
+) -> None:
+    """Returns the configuration associated with a project."""
+    config = api.project_configuration(directory=directory, config_file=config_file, modules=modules, output_dir=output_dir)
+    pprint(config)
+
+@app.command()
+def server(
+    directory: str = typer.Argument("", help="The root folder of your project."),
+    config_file: str = typer.Option("pyproject.toml", help="The TOML formatted config file you wish to use."),
+    open_browser: bool = typer.Option(False, help="If true a browser will be opened pointing at the documentation server"),
+    port: Optional[int] = typer.Option(None, help="The port to expose your documentation on (defaults to: 8000)"),
+    host: Optional[str] = typer.Option(None, help="The host to expose your documentation on (defaults to 127.0.0.1)"),
+    modules: Optional[List[str]] = typer.Option(None, help="One or more modules to render reference documentation for"),
+    reload: bool = typer.Option(False, help="If true the server will live load any changes"),
+) -> None:
+    """Runs a development webserver enabling you to browse documentation locally."""
+    api.server(directory=directory, config_file=config_file, open_browser=open_browser, 
+               port=port, host=host, modules=modules, reload=reload)
+
+@app.command()
+def in_browser(
+    directory: str = typer.Argument("", help="The root folder of your project."),
+    config_file: str = typer.Option("pyproject.toml", help="The TOML formatted config file you wish to use."),
+    port: Optional[int] = typer.Option(None, help="The port to expose your documentation on (defaults to: 8000)"),
+    host: Optional[str] = typer.Option(None, help="The host to expose your documentation on (defaults to 127.0.0.1)"),
+    modules: Optional[List[str]] = typer.Option(None, help="One or more modules to render reference documentation for"),
+    reload: bool = typer.Option(False, help="If true the server will live load any changes"),
+) -> None:
+    """Opens your default webbrowser pointing to a locally started development webserver."""
+    api.in_browser(directory=directory, config_file=config_file, port=port, 
+                  host=host, modules=modules, reload=reload)
+
+@app.command()
+def on_github_pages(
+    directory: str = typer.Argument("", help="The root folder of your project."),
+    config_file: str = typer.Option("pyproject.toml", help="The TOML formatted config file you wish to use."),
+    message: Optional[str] = typer.Option(None, help="The commit message to use when uploading your documentation."),
+    force: bool = typer.Option(False, help="Force the push to the repository."),
+    ignore_version: bool = typer.Option(False, help="Ignore check that build is not being deployed with an old version."),
+    modules: Optional[List[str]] = typer.Option(None, help="One or more modules to render reference documentation for"),
+) -> None:
+    """Regenerates and deploys the documentation to GitHub pages."""
+    api.on_github_pages(directory=directory, config_file=config_file, message=message,
+                       force=force, ignore_version=ignore_version, modules=modules)
+
+if __name__ == "__main__":
+    app()
 ```
 
 ## Example CLI Usage
 
-```
-===== 15:53:48  christo@Macini.local:~/workspace/LVS/ws/SandsB2B/tools/pdocs-1.2.1 📦 v1.2.0 =====
-↳ poetry run pdocs --help
-/Users/christo/.pyenv/versions/3.8.20/envs/pdocs-1.2.1/lib/python3.8/site-packages/hug/input_format.py:81: SyntaxWarning: "is" with a literal. Did you mean "=="?
-if type(value) is list and len(value) is 1:
-
-
-                      88
-                      88
-                      88
-8b,dPPYba,    ,adPPYb,88   ,adPPYba,    ,adPPYba,  ,adPPYba,
-88P'    "8a  a8"    `Y88  a8"     "8a  a8"     ""  I8[    ""
-88       d8  8b       88  8b       d8  8b           `"Y8ba,
-88b,   ,a8"  "8a,   ,d88  "8a,   ,a8"  "8a,   ,aa  aa    ]8I
-88`YbbdP"'    `"8bbdP"Y8   `"YbbdP"'    `"Ybbd8"'  `"YbbdP"'
-88
-88        - Documentation Powered by Your Python Code -
-
-Version: 1.2.0
-Copyright Timothy Edmund Crosley 2019 MIT License
-
-
-Available Commands:
-
-- as_html: Produces HTML formatted output into the specified output_dir.    ...
-- as_markdown: Produces Markdown formatted output into the specified output_...
-- server: Runs a development webserver enabling you to browse documentation ...
+After migration, the CLI should maintain the same functionality and command structure, but with the improved help formatting and type checking that Typer provides:
 
 ```
+$ portray --help
+                                                                                 
+                                                           /███                  
+                                                          |  ███                 
+                                         /██ /███████     /██████    /███████    
+                                        | ██/ ███   ███  |   ███/   /███    ███  
+                                        | ███ ███   ███   /███ /███| ███    █████
+                                        | ███ ███   ███  /███ |  ███| ███   █████
+                                        | ███| ███████ /|  ██████/██| █████████  
+                                        | ███| ███  ███ |     ███/███| ███    ███
+                                        | ███| ███\  ██ |     ███| ███| ███    ███
+                                        | ███| ███ \  ██|     ███| ███| ███    ███
+                                        | ███| ███  \  ██     ███| ███| ███    ███
+                                        |/    |/     \//      \//  \// | //     \//
 
-# Clarifying Questions
+Usage: portray [OPTIONS] COMMAND [ARGS]...
 
-1. Q: I notice that in the pyproject.toml
-file, there's already a typer dependency included. Is it installed and ready to use, or does it need to be added?
+  ASCII art logo here
 
-A: I added the dependency while updating the python version because hug does not work with anything newer than Python 3.8
+Options:
+  --help  Show this message and exit.
 
-2. Q: The current CLI implementation is very minimal in cli.py, but the API implementations in api.py
-contain more complex functionality. Should the typer CLI maintain the exact same function signatures/parameters or are there any improvements you'd like to make?
+Commands:
+  as-html              Produces HTML documentation for a Python project placing it into
+                       output_dir.
+  in-browser           Opens your default webbrowser pointing to a locally started
+                       development webserver.
+  on-github-pages      Regenerates and deploys the documentation to GitHub pages.
+  project-configuration  Returns the configuration associated with a project.
+  server               Runs a development webserver enabling you to browse
+                       documentation locally.
+```
 
-A: The CLI needs to be identical from a consumer perspective. If hug is used for the API we need to look at that in more detail
-
-3. Q: Are there any specific typer features you want to take advantage of (like rich terminal output, auto-completion, etc.)?
-
-A: No - vanilla use - only the minimum amount to support the exact same CLI as the consumer is used to
-
-4. Q: How should error handling be implemented in the new CLI? Typer's approach differs from hug's.
-
-A: For error handling you will have to show me what you mean. However if the current implementation does not do good error handling we do not need to do anything special for the typer conversion
-
-
-5. Q: I see that server functionality is part of the API. Should the server functionality remain the same in terms of implementation details?
-
-A: `server` has a dependency on `hug` We need to plan to rewrite the implementation to use a simple HTTP server.
-
-6. Q: Would you like to maintain backward compatibility with any existing code that might use the current API structure?
-
-A: I do not understand your continued interest in the API ... If it is not dependent on `hug` it is outside the scope of your task
-
-7. Q: The current CLI entry point in pyproject.toml is set to pdocs.cli:app, but the hug implementation doesn't define an app variable. Do you want to follow typer's conventional naming or make other adjustments?
-
-A: The `pdocs.cli:app` is a placeholder - do what makes sense for a typer CLI
-
-8. Q: For the server rewrite, do you prefer a standard Python `http.server`, or is using a minimal FastAPI (or Flask) implementation acceptable?
-
-A: standard Python `http.server` - we need to keep the dependencies simple UNLESS there is a compelling argument for FastAPI AND FastAPI will do well with service static content
-
-9. Q: Should the server’s API endpoints and behavior remain exactly the same, or is there any flexibility to change the API surface (e.g., response format, endpoints)?
-
-A: Keep the implementation backwards compatible. The tasks does not call for changes.
-
-10. Q: Should documentation (README, help texts, etc.) be updated as part of this rewrite, or only code changes?
-
-A: Yes and also the tests need to be fixed after the rewrite so factor that into the plan
-
-12. Q: Is there a timeline or priority for this migration, or can it be done incrementally?
-
-A: Incrementally but this is not a plan to launch the space shuttle. We are modifying a few python files so get on with it
