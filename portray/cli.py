@@ -13,7 +13,7 @@ definition in the [API module](/reference/portray/api)
 
 import sys
 from pprint import pprint
-from typing import Optional, List
+from typing import List, Optional
 
 import typer
 
@@ -51,27 +51,37 @@ def main(
     pass
 
 
+opt_modules = typer.Option(None, help="One or more modules to render reference documentation for")
+
+
 @app.command()
 def as_html(
     directory: str = typer.Argument("", help="The root folder of your project."),
     config_file: str = typer.Option("pyproject.toml", help="The TOML formatted config file you wish to use."),
     output_dir: str = typer.Option("site", help="The directory to place the generated HTML into."),
-    overwrite: bool = typer.Option(False, help="If set to True any existing documentation output will be removed before generating new documentation."),
-    modules: Optional[List[str]] = typer.Option(None, help="One or more modules to render reference documentation for"),
+    overwrite: bool = typer.Option(
+        False,
+        help="If set to True any existing documentation output will be removed before generating new documentation.",
+    ),
+    modules: Optional[List[str]] = opt_modules,
 ) -> None:
     """Produces HTML documentation for a Python project placing it into output_dir."""
-    api.as_html(directory=directory, config_file=config_file, output_dir=output_dir, overwrite=overwrite, modules=modules)
+    api.as_html(
+        directory=directory, config_file=config_file, output_dir=output_dir, overwrite=overwrite, modules=modules
+    )
 
 
 @app.command()
 def project_configuration(
     directory: str = typer.Argument("", help="The root folder of your project."),
     config_file: str = typer.Option("pyproject.toml", help="The TOML formatted config file you wish to use."),
-    modules: Optional[List[str]] = typer.Option(None, help="One or more modules to include in the configuration for reference rendering"),
+    modules: Optional[List[str]] = opt_modules,
     output_dir: Optional[str] = typer.Option(None, help="The directory to place the generated HTML into."),
 ) -> None:
     """Returns the configuration associated with a project."""
-    config = api.project_configuration(directory=directory, config_file=config_file, modules=modules, output_dir=output_dir)
+    config = api.project_configuration(
+        directory=directory, config_file=config_file, modules=modules, output_dir=output_dir
+    )
     pprint(config)
 
 
@@ -79,10 +89,12 @@ def project_configuration(
 def server(
     directory: str = typer.Argument("", help="The root folder of your project."),
     config_file: str = typer.Option("pyproject.toml", help="The TOML formatted config file you wish to use."),
-    open_browser: bool = typer.Option(False, help="If true a browser will be opened pointing at the documentation server"),
+    open_browser: bool = typer.Option(
+        False, help="If true a browser will be opened pointing at the documentation server"
+    ),
     port: Optional[int] = typer.Option(None, help="The port to expose your documentation on (defaults to: 8000)"),
     host: Optional[str] = typer.Option(None, help="The host to expose your documentation on (defaults to 127.0.0.1)"),
-    modules: Optional[List[str]] = typer.Option(None, help="One or more modules to render reference documentation for"),
+    modules: Optional[List[str]] = opt_modules,
     reload: bool = typer.Option(False, help="If true the server will live load any changes"),
 ) -> None:
     """Runs a development webserver enabling you to browse documentation locally."""
@@ -93,7 +105,7 @@ def server(
         port=port,
         host=host,
         modules=modules,
-        reload=reload
+        reload=reload,
     )
 
 
@@ -103,18 +115,11 @@ def in_browser(
     config_file: str = typer.Option("pyproject.toml", help="The TOML formatted config file you wish to use."),
     port: Optional[int] = typer.Option(None, help="The port to expose your documentation on (defaults to: 8000)"),
     host: Optional[str] = typer.Option(None, help="The host to expose your documentation on (defaults to 127.0.0.1)"),
-    modules: Optional[List[str]] = typer.Option(None, help="One or more modules to render reference documentation for"),
+    modules: Optional[List[str]] = opt_modules,
     reload: bool = typer.Option(False, help="If true the server will live load any changes"),
 ) -> None:
     """Opens your default webbrowser pointing to a locally started development webserver."""
-    api.in_browser(
-        directory=directory,
-        config_file=config_file,
-        port=port,
-        host=host,
-        modules=modules,
-        reload=reload
-    )
+    api.in_browser(directory=directory, config_file=config_file, port=port, host=host, modules=modules, reload=reload)
 
 
 @app.command()
@@ -123,8 +128,10 @@ def on_github_pages(
     config_file: str = typer.Option("pyproject.toml", help="The TOML formatted config file you wish to use."),
     message: Optional[str] = typer.Option(None, help="The commit message to use when uploading your documentation."),
     force: bool = typer.Option(False, help="Force the push to the repository."),
-    ignore_version: bool = typer.Option(False, help="Ignore check that build is not being deployed with an old version."),
-    modules: Optional[List[str]] = typer.Option(None, help="One or more modules to render reference documentation for"),
+    ignore_version: bool = typer.Option(
+        False, help="Ignore check that build is not being deployed with an old version."
+    ),
+    modules: Optional[List[str]] = opt_modules,
 ) -> None:
     """Regenerates and deploys the documentation to GitHub pages."""
     api.on_github_pages(
@@ -133,7 +140,7 @@ def on_github_pages(
         message=message,
         force=force,
         ignore_version=ignore_version,
-        modules=modules
+        modules=modules,
     )
 
 
