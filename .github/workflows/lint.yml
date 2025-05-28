@@ -1,35 +1,60 @@
 name: Lint
 
-on: [push, pull_request]
+on:
+  # Runs on pushes targeting the default branch
+  push:
+    branches:
+      - "*"
+  pull_request:
+      types: [opened, synchronize, reopened]
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
+permissions:
+  id-token: write # This is required for requesting the JWT
+  contents: read  # This is required for actions/checkout
+  pages: write      # to deploy to Pages
+
+# Allow one concurrent deployment
+concurrency:
+  group: "lint"
+  cancel-in-progress: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: [3.9]
+        python-version: [3.12]
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
 
-      - name: pip cache
-        uses: actions/cache@v1
-        with:
-          path: ~/.cache/pip
-          key: lint-pip-${{ hashFiles('**/pyproject.toml') }}
-          restore-keys: |
-            lint-pip-
+#      - name: pip cache
+#        uses: actions/cache@v1
+#        with:
+#          path: ~/.cache/pip
+#          key: lint-pip-${{ hashFiles('**/pyproject.toml') }}
+#          restore-keys: |
+#            lint-pip-
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v1
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install --upgrade poetry
-          poetry install
+          python -m pip install --upgrade poetry==1.8.5
+          poetry install --with main,dev --no-ansi --no-interaction || {
+            poetry install --with main,dev --no-ansi --no-interaction;
+          }
+          poetry check --lock
+        shell: bash
 
       - name: Lint
-        run: ./scripts/lint.sh
+        run: |
+          poetry run poe lint
+        shell: bash
