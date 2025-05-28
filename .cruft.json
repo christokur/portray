@@ -13,7 +13,7 @@
       "description": "Your Project with Great Documentation",
       "license_text": "MIT License",
       "readme": "README.md",
-      "version": "1.9.0",
+      "version": "1.9.1",
       "package_name": "portray",
       "packager": "poetry",
       "dynamic": "",
@@ -103,9 +103,9 @@
       "tests_list": "",
       "poe_prepare_sequence": "locks,deps,formats,tests,gcl,docs-make,add,hooks",
       "_extensions": [
-        "toolbag.utils.template_expander.extensions.python_extension.PythonExtension",
+        "toolbag.utils.template_expander.extensions.ExpandCookiecutterTemplateExtension",
         "toolbag.utils.template_expander.extensions.PythonExtension",
-        "toolbag.utils.template_expander.extensions.ExpandCookiecutterTemplateExtension"
+        "toolbag.utils.template_expander.extensions.python_extension.PythonExtension"
       ],
       "_notes": {
         "lists": "Lists have a special meaning for Cookiecutter so we are forced to wrap them in a map or express as a CSV string and split in the template.",

@@ -134,8 +134,16 @@ def server(
 
         if open_browser:
             webbrowser.open_new(f"http://{host}:{port}")
+        try:
+            live_server.serve(root=docs_folder, host=host, port=port, restart_delay=0)
+        except OSError as e:
+            print(
+                f"Failed to start server: {e}"
+                "\nTry specifying a different port using the `--port` option or stop the server using that port."
+            )
+            import sys
 
-        live_server.serve(root=docs_folder, host=host, port=port, restart_delay=0)
+            sys.exit(1)
 
 
 def project_configuration(

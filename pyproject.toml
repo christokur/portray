@@ -7,7 +7,7 @@ requires = [
 
 [tool.poetry]
 name = "portray"
-version = "1.9.0"
+version = "1.9.1"
 description = "Your Project with Great Documentation"
 authors = [
     "Timothy Crosley <timothy.crosley@gmail.com>",
@@ -44,10 +44,14 @@ Homepage = "https://github.com/christokur/portray"
 Documentation = "https://portray.docs.infra-area2.com/"
 Changelog = "https://github.com/christokur/portray/blob/main/CHANGELOG.md"
 
+[[tool.poetry.source]]
+name = "codeartifact"
+url = "https://artifacts-433714148419.d.codeartifact.us-east-2.amazonaws.com/pypi/pypi/simple/"
+priority = "primary"
 
 [[tool.poetry.source]]
 name = "pypi"
-priority = "primary"
+priority = "supplemental"
 
 [tool.poetry.build]
 generate-setup-file = false
@@ -350,7 +354,7 @@ interpreter = "bash"
 
 [tool.commitizen]
 name = "cz_conventional_commits"
-version = "1.9.0"
+version = "1.9.1"
 version_files = [
     ".bumpversion.cfg",
     "VERSION",
