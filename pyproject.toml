@@ -40,18 +40,14 @@ package-mode = true
 portray = "portray.cli:app"
 
 [tool.poetry.urls]
-Homepage = "https://github.com/SandsB2B/portray"
+Homepage = "https://github.com/christokur/portray"
 Documentation = "https://portray.docs.infra-area2.com/"
-Changelog = "https://github.com/SandsB2B/portray/blob/main/CHANGELOG.md"
+Changelog = "https://github.com/christokur/portray/blob/main/CHANGELOG.md"
 
-[[tool.poetry.source]]
-name = "codeartifact"
-url = "https://artifacts-433714148419.d.codeartifact.us-east-2.amazonaws.com/pypi/pypi/simple/"
-priority = "primary"
 
 [[tool.poetry.source]]
 name = "pypi"
-priority = "supplemental"
+priority = "primary"
 
 [tool.poetry.build]
 generate-setup-file = false
@@ -107,12 +103,6 @@ pytest-cov = "~4.1.0"
 pytest-datadir = "~1.5.0"
 pytest-mock = "~3.11.1"
 pytest-stub = "~1.1.0"
-
-[tool.poetry.group.local-dev]
-optional = true
-
-[tool.poetry.group.local-dev.dependencies]
-bump2version = "~1.0.4.post1"
 
 [tool.poetry.group.docs]
 optional = true
@@ -171,9 +161,9 @@ exclude = [
 # In addition to the standard set of exclusions, omit all tests, plus a specific file.
 extend-exclude = [
     "tests/modules/malformed",
-    "tests",
-    "tests/onpath/malformed_syntax.py",
     "debug",
+    "tests/onpath/malformed_syntax.py",
+    "tests",
 ]
 # Group violations by containing file.
 output-format = "pylint"
@@ -395,7 +385,7 @@ extra_markdown_extensions = ["admonition", "codehilite", "extra"]
 site_name = "Python Docs"
 site_description = "A simple program and library to auto generate API documentation for Python modules."
 site_url = "https://portray.docs.infra-area2.com/"
-repo_url = "https://github.com/SandsB2B/portray"
+repo_url = "https://github.com/christokur/portray"
 edit_uri = "edit/master"
 copyright = "(c) 2022 Las Vegas Sands"
 

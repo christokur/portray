@@ -2,7 +2,7 @@
 site_name: "portray"
 site_description: "Your Project with Great Documentation"
 site_url: "https://portray.docs.infra-area2.com/"
-repo_url: "https://github.com/SandsB2B/portray"
+repo_url: "https://github.com/christokur/portray"
 edit_uri: "edit/master"
 copyright: "(c) 2022 Las Vegas Sands"
 extra:

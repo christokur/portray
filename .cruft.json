@@ -66,7 +66,7 @@
       "pre_commit_eof_fixer_excludes": "",
       "pre_commit_whitespace_fixer_excludes": "",
       "pre_commit_fail_fast": "true",
-      "poetry_localdev_dependencies_enabled": "yes",
+      "poetry_localdev_dependencies_enabled": "no",
       "poetry_package_mode": "true",
       "poetry_keywords": "gitops,devops",
       "poetry_include": "*.cfg;*.json;*.yaml",
@@ -103,9 +103,9 @@
       "tests_list": "",
       "poe_prepare_sequence": "locks,deps,formats,tests,gcl,docs-make,add,hooks",
       "_extensions": [
-        "toolbag.utils.template_expander.extensions.PythonExtension",
+        "toolbag.utils.template_expander.extensions.python_extension.PythonExtension",
         "toolbag.utils.template_expander.extensions.ExpandCookiecutterTemplateExtension",
-        "toolbag.utils.template_expander.extensions.python_extension.PythonExtension"
+        "toolbag.utils.template_expander.extensions.PythonExtension"
       ],
       "_notes": {
         "lists": "Lists have a special meaning for Cookiecutter so we are forced to wrap them in a map or express as a CSV string and split in the template.",
