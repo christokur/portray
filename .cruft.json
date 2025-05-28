@@ -70,7 +70,7 @@
       "poetry_package_mode": "true",
       "poetry_keywords": "gitops,devops",
       "poetry_include": "*.cfg;*.json;*.yaml",
-      "poetry_exclude": ".bumpversion.cfg",
+      "poetry_exclude": "",
       "poetry_url_documentation": "",
       "poetry_url_homepage": "",
       "portray_pdocs_excluded_modules": "",
