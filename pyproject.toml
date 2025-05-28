@@ -56,7 +56,7 @@ generate-setup-file = false
 python = ">=3.11.8,<3.13.0"
 mkdocs-material = "~=8.5.0"
 mkdocs = "~=1.3.0"
-typer = "~0.16.0"
+typer = "~0.11.1"
 pdocs = { git = "https://github.com/christokur/pdocs.git", branch = "v2.0.0" }
 toml = ">=0.10.0"
 GitPython = ">=3.0"
