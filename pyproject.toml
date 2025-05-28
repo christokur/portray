@@ -44,14 +44,10 @@ Homepage = "https://github.com/christokur/portray"
 Documentation = "https://portray.docs.infra-area2.com/"
 Changelog = "https://github.com/christokur/portray/blob/main/CHANGELOG.md"
 
-[[tool.poetry.source]]
-name = "codeartifact"
-url = "https://artifacts-433714148419.d.codeartifact.us-east-2.amazonaws.com/pypi/pypi/simple/"
-priority = "primary"
 
 [[tool.poetry.source]]
 name = "pypi"
-priority = "supplemental"
+priority = "primary"
 
 [tool.poetry.build]
 generate-setup-file = false
